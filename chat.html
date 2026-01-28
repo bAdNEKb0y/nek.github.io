@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>FBLASALLE Chat</title>
+
+<style>
+body {
+  background:#050000;
+  color:#ff2a2a;
+  font-family:monospace;
+  padding:20px;
+}
+
+input, button {
+  background:#000;
+  color:#ff2a2a;
+  border:1px solid #ff2a2a;
+  padding:8px;
+  margin:5px;
+}
+
+#chat {
+  display:none;
+  margin-top:20px;
+}
+
+#messages div {
+  border-bottom:1px solid #330000;
+  padding:5px 0;
+}
+</style>
+</head>
+
+<body>
+
+<h2>💬 FBLASALLE Secure Chat</h2>
+
+<input id="name" placeholder="Nom">
+<input id="code" placeholder="Code / Salon">
+<button onclick="login()">Entrer</button>
+
+<div id="chat">
+  <input id="msg" placeholder="Message">
+  <button onclick="send()">Envoyer</button>
+  <div id="messages"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "sb_secret_0BjwfxhSjPBQX49sBITaPw_awT_G2A_",
+  authDomain: "TON_PROJET.firebaseapp.com",
+  databaseURL: "https://gjsdiagehafnwozhqjer.supabase.co",
+  projectId: "Fblasalle chat"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let room = "";
+let user = "";
+let admin = false;
+
+function login() {
+  user = name.value;
+  room = code.value;
+
+  if (user === "admin" && room === "admin007!") {
+    admin = true;
+    alert("Mode ADMIN activé");
+  }
+
+  chat.style.display = "block";
+
+  db.ref("rooms/" + room).on("child_added", snap => {
+    const d = document.createElement("div");
+    d.textContent = snap.val().user + " : " + snap.val().msg;
+    messages.appendChild(d);
+  });
+}
+
+function send() {
+  db.ref("rooms/" + room).push({
+    user: user,
+    msg: msg.value
+  });
+  msg.value = "";
+}
+</script>
+
+</body>
+</html>
