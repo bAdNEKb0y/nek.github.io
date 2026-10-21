@@ -37,7 +37,7 @@ export function predictOwn(g, mine, dt, now, rtt) {
   const spd = Math.hypot(P.vx, P.vy);
   const p = V.p.slice(); p[ci] = [P.x, P.y, spd > 1.5 ? P.vx / spd : iv[2], spd > 1.5 ? P.vy / spd : iv[3], iv[4]];
   let b = V.b;
-  if (V.b[3] === ci) b = [V.b[0] + dx, V.b[1] + dy, V.b[2], V.b[3], V.b[4]];
+  if (V.b[3] === ci) b = [V.b[0] + dx, V.b[1] + dy, V.b[2], V.b[3], V.b[4], V.b[5] || 0];
   g.V = { ...V, p, b };
 }
 

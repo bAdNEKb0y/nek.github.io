@@ -30,6 +30,8 @@ function playEvent(type, val) {
   else if (type === 'post') tone(700, .15, 'triangle', .12, 500);
   else if (type === 'save') tone(220, .08, 'sine', .12);
   else if (type === 'steal') tone(90, .12, 'sawtooth', .12, 50);
+  else if (type === 'header') tone(260, .1, 'sine', .2, 160);
+  else if (type === 'cross') tone(180, .12, 'triangle', .14, 90);
 }
 
 /* ---------- Compte ---------- */
@@ -588,7 +590,7 @@ function interp(snaps, now) {
   const k = clamp((t - a.at) / (b.at - a.at || 1), 0, 1), A = a.s, B = b.s;
   const lerp = (x, y) => x + (y - x) * k;
   return { ...B, p: B.p.map((p, i) => [lerp(A.p[i][0], p[0]), lerp(A.p[i][1], p[1]), p[2], p[3], p[4]]),
-    b: [lerp(A.b[0], B.b[0]), lerp(A.b[1], B.b[1]), B.b[2], B.b[3], B.b[4]], tm: lerp(A.tm, B.tm) };
+    b: [lerp(A.b[0], B.b[0]), lerp(A.b[1], B.b[1]), B.b[2], B.b[3], B.b[4], lerp(A.b[5] || 0, B.b[5] || 0)], tm: lerp(A.tm, B.tm) };
 }
 
 let last = performance.now();
