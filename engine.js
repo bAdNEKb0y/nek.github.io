@@ -135,7 +135,10 @@ function passTo(G, p, m, opt = {}) {
     const vz = (1.7 + GRAV * t * t / 2) / t;
     kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, isCross ? .9 : .8, Math.min(vz, 22));
     b.cross = isCross;
-    G.passTarget = m; G.passPt = [tx, ty]; G.passT = t + .8;
+    // le receveur = le coéquipier le mieux placé pour le point de chute réel (évite les changements de joueur en vol)
+    const L = landing(b);
+    if (L[0] >= 0) { let best = m, bd = hyp(m.x - L[0], m.y - L[1]); for (const q of G.byTeam[p.t]) { if (q === p || q.gk) continue; const dq = hyp(q.x - L[0], q.y - L[1]); if (dq < bd - 2) { bd = dq; best = q; } } m = best; }
+    G.passTarget = m; G.passPt = [tx, ty]; G.passT = t + 1.2;
     if (isCross) ev(G, 'cross', {});
   } else {
     const sp = clamp(19 + dd * .95, 22, 50), t = dd / sp * 1.15;
@@ -148,6 +151,23 @@ function passTo(G, p, m, opt = {}) {
     G.passTarget = m; G.passPt = [tx, ty]; G.passT = dd / sp + .9;
   }
   if (G.cfg.humans[p.t] && !m.gk) G.ctrl[p.t] = m;
+}
+/** Reprise de volée directe (joueurs notés 90 et plus) : le receveur frappe sans contrôle */
+function canVolley(G, p) {
+  const b = G.ball;
+  if (p.r < 90 || p.gk || b.z < .25 || b.z > 2.2) return false;
+  if (toGoalOf(p.t, p.y) > 30 || Math.abs(p.x - CX) > 22) return false;
+  return isCtrl(G, p) ? G.hold[p.t] : Math.random() < .45;
+}
+function volley(G, p) {
+  const b = G.ball, gy = atkY(p.t), tm = T(G, p), gk = G.byTeam[1 - p.t][0];
+  const aimX = CX + (gk.x > CX ? -1 : 1) * rnd(2.5, GH - 1);
+  const a = Math.atan2(gy - b.y, aimX - b.x) + gauss() * (1.12 - (tm.att + pb(G, p)) / 100) * .26;
+  const sp = 36 + (p.r - 90) * 1.4 + rnd(0, 6);
+  p.kcd = .4; p.st.tir++; G.stats.shots[p.t]++;
+  kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, 1.4, rnd(0, 2));
+  const vy = Math.sin(a) * sp; if (vy) { const tt = (gy - b.y) / vy; if (tt > 0 && Math.abs(b.x + Math.cos(a) * sp * tt - CX) < GH) G.stats.onT[p.t]++; }
+  ev(G, 'volley', {}); banner(G, 'REPRISE DE VOLÉE !', p.name, 1, p.t); G.passTarget = null;
 }
 /** Tête : vers le but si on attaque, dégagement sinon */
 function header(G, p) {
@@ -285,7 +305,7 @@ function humanControl(G, t, I, dt) {
       const dx = mag > .3 ? I.jx / I.mag : 0, dy = mag > .3 ? I.jy / I.mag : dirOf(t);
       if (I.lob) passTo(G, own, chooseLongPass(G, own, dx, dy), { loft: true }); else passTo(G, own, choosePass(G, own, dx, dy));
     } else if (I.a) switchPlayer(G, t);
-    if (I.b) tackle(G, c);
+    if (I.b && !(G.land && !own)) tackle(G, c); // ballon en l'air : TIR sert à préparer la reprise, pas à tacler
   }
 }
 
@@ -409,13 +429,14 @@ function aiField(G, p, dt) {
   if (possess) { const h = homeTarget(G, p, true); moveTo(G, p, h[0], h[1], .85, dt); return; }
   const gkHas = own && own.gk;
   if (!own && b.cross && G.passPt && G.passTarget && G.passTarget.t !== p.t && !p.gk && p.i <= 2 && G.cover[p.t] !== p) { moveTo(G, p, G.passPt[0], G.passPt[1], 1, dt); return; }
-  if (!gkHas && G.chaser[p.t] === p) {
+  const ourLob = G.land && G.passTarget && G.passTarget.t === p.t && G.passTarget !== p; // notre passe en l'air : seul le receveur y va
+  if (!gkHas && G.chaser[p.t] === p && !ourLob) {
     const q = G.land || [b.x + b.vx * .3, b.y + b.vy * .3];
     moveTo(G, p, q[0], q[1], G.land ? 1 : G.cfg.humans[p.t] ? .85 : 1, dt);
     if (own && dist(p, b) < 3.3) { p.aiT -= dt; if (p.aiT <= 0) { p.aiT = A.react * rnd(.8, 1.6); if (Math.random() < .32 * A.tack) tackle(G, p); } }
     return;
   }
-  if (!gkHas && G.cover[p.t] === p) { const gy = ownY(p.t); moveTo(G, p, b.x * .7 + CX * .3, b.y + (gy - b.y) * .35, .9, dt); return; }
+  if (!gkHas && G.cover[p.t] === p && !ourLob) { const gy = ownY(p.t); moveTo(G, p, b.x * .7 + CX * .3, b.y + (gy - b.y) * .35, .9, dt); return; }
   const h = homeTarget(G, p, false); moveTo(G, p, h[0], h[1], .8, dt);
 }
 function aiPlayer(G, p, dt) {
@@ -467,6 +488,7 @@ function ballUpdate(G, dt) {
   if (cand) {
     const p = cand;
     const box = p.gk && Math.abs(p.y - ownY(p.t)) < 15 && Math.abs(p.x - CX) < 19;
+    if (!box && b.z > .25 && b.last && b.last.t === p.t && canVolley(G, p) && !(p.r >= 92 && b.z > 1.1 && isCtrl(G, p))) { volley(G, p); return; }
     if (b.z > .9 && !box) {
       // un coéquipier contrôle de la poitrine ; dans la surface adverse sur un centre, on reprend de la tête
       const mate = b.last && b.last.t === p.t, shotZone = toGoalOf(p.t, p.y) < 22 && Math.abs(p.x - CX) < 16;

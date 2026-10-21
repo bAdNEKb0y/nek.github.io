@@ -37,7 +37,7 @@ const STEPS = [
       <circle cx="80" cy="120" r="32" fill="none" stroke="#f0776b" stroke-width="5" stroke-dasharray="200" stroke-dashoffset="200"><animate attributeName="stroke-dashoffset" values="200;0;0" keyTimes="0;.8;1" dur="1.4s" repeatCount="indefinite"/></circle>`) },
   { t: 'Défendre', d: 'Sans le ballon, le bouton rouge devient VOLER : approche-toi du porteur et appuie pour tacler. CHANGER te fait prendre le joueur le plus proche du ballon.',
     art: pitch(`${player(150, 85, 3, Y, true)}${player(185, 85, 9, C)}${ball(172, 85)}${btn(250, 60, 24, 'VOLER', '#f0776b')}${btn(270, 125, 22, 'CHANGER')}${finger(250, 60)}`) },
-  { t: 'Têtes et retournées', d: 'Sur un centre, ton joueur reprend de la tête tout seul. Si ton joueur a 92 ou plus, garde TIR appuyé quand le ballon arrive en l\'air : il tente une retournée !',
+  { t: 'Têtes et retournées', d: 'Sur un centre, ton joueur reprend de la tête tout seul. Garde TIR appuyé pendant que le ballon arrive en l\'air : un joueur noté 90+ tente une reprise de volée, un 92+ peut tenter une retournée !',
     art: pitch(`<rect x="300" y="62" width="10" height="46" fill="rgba(255,255,255,.2)" stroke="#fff" stroke-width="2"/>
       <g transform="translate(250 85)"><circle r="22" fill="none" stroke="#ffe08a" stroke-width="2" opacity=".7"><animate attributeName="r" values="14;26;14" dur="1s" repeatCount="indefinite"/></circle>
       <g><animateTransform attributeName="transform" type="scale" values="1 1;.2 1;1 1" dur="1s" repeatCount="indefinite"/><circle r="11" fill="#ff4fa3" stroke="${K}" stroke-width="1.5"/><text y="4" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="sans-serif">7</text></g></g>

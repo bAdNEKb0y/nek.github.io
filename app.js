@@ -32,6 +32,7 @@ function playEvent(type, val) {
   else if (type === 'save') tone(220, .08, 'sine', .12);
   else if (type === 'steal') tone(90, .12, 'sawtooth', .12, 50);
   else if (type === 'header') tone(260, .1, 'sine', .2, 160);
+  else if (type === 'volley') { tone(110, .16, 'sawtooth', .2, 50); buzz([25, 20, 40]); }
   else if (type === 'bicycle') { tone(120, .2, 'sawtooth', .2, 60); setTimeout(() => cheer(), 120); buzz([30, 30, 60]); }
   else if (type === 'cross') tone(180, .12, 'triangle', .14, 90);
 }
@@ -650,7 +651,7 @@ function frame(now) {
         if (s <= g.lastEv) continue;
         g.lastEv = s; playEvent(type, val);
         if (type === 'goal') g.parts.push(...R.goalBurst(val, g.M));
-        if (type === 'bicycle') g.parts.push(...R.burstAt(g.V, g.M));
+        if (type === 'bicycle' || type === 'volley') g.parts.push(...R.burstAt(g.V, g.M));
       }
     }
     for (const q of g.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 300 * dt; q.rot += dt * 6; q.life -= dt; }
