@@ -18,38 +18,71 @@ export function shirtSVG(k) {
   return `<svg viewBox="0 0 52 54" aria-hidden="true"><defs><clipPath id="${id}"><path d="${path}"/></clipPath></defs><path d="${path}" fill="${k.c1}"/><g clip-path="url(#${id})">${pat}</g><path d="${path}" fill="none" stroke="${trim}" stroke-width="2.2" stroke-linejoin="round"/><path d="M22 4 Q26 9 30 4" fill="none" stroke="${k.p === 'solid' ? k.c2 : '#fff'}" stroke-width="2.4"/></svg>`;
 }
 
-/* Portrait en silhouette (pas de photo, pas de teint de peau) : coiffure, barbe et maillot uniques et stables pour chaque joueur */
+/* Portrait illustré (pas de photo) : visage, coiffure, barbe et maillot uniques et stables pour chaque joueur, teinté à la couleur de la carte */
 function hash(str) { let h = 2166136261; for (const ch of str) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 let faceN = 0;
 export function faceSVG(c) {
-  const h = hash(c.id + c.name);
-  const skin = 'currentColor', hair = 'currentColor', style = (h >>> 9) % 7, beard = (h >>> 13) % 4;
+  const h = hash(c.id + c.name), R = n => (h >>> n);
   const k = Array.isArray(c.kit) ? { c1: c.kit[0], c2: c.kit[1], p: c.kit[2] } : c.kit;
   const id = 'fc' + (faceN++);
+  const shape = R(3) % 3, style = R(6) % 9, beard = R(11) % 5, brow = R(15) % 3, mouth = R(18) % 3, eye = R(21) % 2;
+  // Visage (3 morphologies) — coordonnées dans une boîte 100 x 112
+  const jaw = ['M30 44 C30 24 40 16 50 16 C60 16 70 24 70 44 C70 60 64 72 50 76 C36 72 30 60 30 44 Z',
+    'M29 44 C29 23 39 15 50 15 C61 15 71 23 71 44 C71 58 67 70 58 75 L42 75 C33 70 29 58 29 44 Z',
+    'M31 43 C31 24 40 17 50 17 C60 17 69 24 69 43 C69 61 62 74 50 77 C38 74 31 61 31 43 Z'][shape];
+  const ink = 'rgba(0,0,0,.55)', soft = 'rgba(0,0,0,.18)';
   let pat = '';
-  if (k.p === 'stripes') for (let x = 8; x < 52; x += 9) pat += `<rect x="${x}" y="38" width="4.5" height="20" fill="${k.c2}"/>`;
-  if (k.p === 'band') pat = `<rect x="21" y="38" width="10" height="20" fill="${k.c2}"/>`;
-  if (k.p === 'diag') pat = `<path d="M8 58 L44 38 L52 38 L52 58 Z" fill="${k.c2}"/>`;
-  if (k.p === 'sleeves') pat = `<rect x="0" y="38" width="11" height="20" fill="${k.c2}"/><rect x="41" y="38" width="11" height="20" fill="${k.c2}"/>`;
-  const shoulders = 'M2 58 C2 46 10 40 20 38 L32 38 C42 40 50 46 50 58 Z';
-  const hairShapes = [
-    `<path d="M13 21 C12 10 19 5 26 5 C33 5 40 10 39 21 C37 15 33 12 26 12 C19 12 15 15 13 21 Z" fill="${hair}"/>`,
-    `<path d="M14 18 C14 10 19 7 26 7 C33 7 38 10 38 18 C35 14 31 13 26 13 C21 13 17 14 14 18 Z" fill="${hair}" opacity=".9"/>`,
-    `<circle cx="26" cy="13" r="12" fill="${hair}"/><circle cx="16" cy="17" r="6" fill="${hair}"/><circle cx="36" cy="17" r="6" fill="${hair}"/>`,
-    `<path d="M12 24 C10 9 18 4 26 4 C34 4 42 9 40 24 L38 30 C38 18 33 13 26 13 C19 13 14 18 14 30 Z" fill="${hair}"/>`,
-    `<path d="M15 16 C17 9 22 7 26 7 C31 7 36 9 37 16 C33 12 30 12 26 12 C22 12 19 12 15 16 Z" fill="${hair}" opacity=".55"/>`,
-    `<path d="M13 20 C13 9 20 5 27 6 C35 6 40 12 39 20 C34 13 22 11 13 20 Z" fill="${hair}"/><path d="M30 6 C34 2 40 4 39 9" fill="none" stroke="${hair}" stroke-width="3"/>`,
-    `<path d="M14 19 C13 11 18 6 26 6 C34 6 39 11 38 19 L36 15 L33 18 L30 14 L27 18 L24 14 L21 18 L18 14 L16 18 Z" fill="${hair}"/>`,
+  if (k.p === 'stripes') for (let x = 6; x < 100; x += 14) pat += `<rect x="${x}" y="78" width="7" height="34" fill="${k.c2}"/>`;
+  if (k.p === 'band') pat = `<rect x="40" y="78" width="20" height="34" fill="${k.c2}"/>`;
+  if (k.p === 'diag') pat = `<path d="M10 112 L80 78 L100 78 L100 112 Z" fill="${k.c2}"/>`;
+  if (k.p === 'sleeves') pat = `<rect x="0" y="78" width="20" height="34" fill="${k.c2}"/><rect x="80" y="78" width="20" height="34" fill="${k.c2}"/>`;
+  const torso = 'M4 112 C4 94 16 84 36 80 L64 80 C84 84 96 94 96 112 Z';
+  const hairs = [
+    // court dégradé
+    `<path d="M30 40 C28 20 38 11 50 11 C62 11 72 20 70 40 C68 30 62 24 50 24 C38 24 32 30 30 40 Z"/>`,
+    // raie sur le côté
+    `<path d="M29 42 C26 18 38 9 52 10 C65 11 73 21 71 40 C66 28 58 22 46 24 C40 25 34 31 29 42 Z"/><path d="M44 12 C48 17 56 21 66 22" fill="none" stroke="${soft}" stroke-width="1.5"/>`,
+    // boucles
+    `<g><circle cx="50" cy="20" r="12"/><circle cx="37" cy="24" r="9"/><circle cx="63" cy="24" r="9"/><circle cx="32" cy="34" r="6"/><circle cx="68" cy="34" r="6"/><circle cx="44" cy="15" r="8"/><circle cx="57" cy="15" r="8"/></g>`,
+    // mi-long
+    `<path d="M27 52 C22 20 36 9 50 9 C64 9 78 20 73 52 L70 60 C70 40 66 26 50 25 C34 26 30 40 30 60 Z"/>`,
+    // crâne rasé (ombre)
+    `<path d="M31 36 C31 21 40 14 50 14 C60 14 69 21 69 36 C64 27 58 24 50 24 C42 24 36 27 31 36 Z" opacity=".45"/>`,
+    // houppe
+    `<path d="M30 40 C29 20 38 12 50 12 C62 12 71 20 70 40 C66 28 58 24 48 25 C40 26 34 31 30 40 Z"/><path d="M42 14 C46 4 60 2 66 10 C60 8 54 10 50 16 Z"/>`,
+    // pointes
+    `<path d="M30 40 C29 22 38 13 50 13 C62 13 71 22 70 40 L67 30 L62 35 L58 27 L53 33 L49 25 L45 33 L41 27 L37 34 L33 29 Z"/>`,
+    // chignon / man bun
+    `<path d="M30 40 C29 21 38 13 50 13 C62 13 71 21 70 40 C67 28 60 24 50 24 C40 24 33 28 30 40 Z"/><circle cx="50" cy="8" r="6"/>`,
+    // tresses
+    `<path d="M30 40 C29 20 38 12 50 12 C62 12 71 20 70 40 C67 28 60 24 50 24 C40 24 33 28 30 40 Z"/><path d="M38 16 L36 36 M46 13 L45 30 M54 13 L55 30 M62 16 L64 36" stroke="${soft}" stroke-width="1.6"/>`,
   ];
-  const beards = ['', `<path d="M17 28 C18 36 22 39 26 39 C30 39 34 36 35 28 C33 33 30 35 26 35 C22 35 19 33 17 28 Z" fill="${hair}" opacity=".85"/>`,
-    `<path d="M21 33 C23 35 29 35 31 33 L30 36 C28 38 24 38 22 36 Z" fill="${hair}" opacity=".85"/>`, `<path d="M17 27 C18 35 22 38.5 26 38.5 C30 38.5 34 35 35 27 L35 29 C33 35 30 37 26 37 C22 37 19 35 17 29 Z" fill="${hair}" opacity=".45"/>`];
-  return `<svg viewBox="0 0 52 58" aria-hidden="true"><defs><clipPath id="${id}"><path d="${shoulders}"/></clipPath></defs>
-    <path d="${shoulders}" fill="${k.c1}"/><g clip-path="url(#${id})">${pat}</g><path d="${shoulders}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="1.2"/>
-    <path d="M21 38 L26 44 L31 38" fill="none" stroke="${k.p === 'solid' ? k.c2 : '#fff'}" stroke-width="2"/>
-    <g opacity=".5"><rect x="21.5" y="31" width="9" height="9" rx="3" fill="${skin}"/>
-    <ellipse cx="13.6" cy="23.5" rx="2.4" ry="3.4" fill="${skin}"/><ellipse cx="38.4" cy="23.5" rx="2.4" ry="3.4" fill="${skin}"/>
-    <ellipse cx="26" cy="22.5" rx="12.3" ry="14.6" fill="${skin}"/></g>
-    <g opacity=".9">${beards[beard]}${hairShapes[style]}</g>
+  const beards = ['',
+    `<path d="M33 54 C35 68 42 75 50 75 C58 75 65 68 67 54 C63 64 57 67 50 67 C43 67 37 64 33 54 Z"/>`,
+    `<path d="M42 64 C45 61 55 61 58 64 C57 67 54 69 50 69 C46 69 43 67 42 64 Z M47 70 C48 74 52 74 53 70 Z"/>`,
+    `<path d="M33 52 C35 68 42 75 50 75 C58 75 65 68 67 52 C65 62 58 70 50 70 C42 70 35 62 33 52 Z" opacity=".5"/>`,
+    `<path d="M41 61 C45 59 55 59 59 61 C56 62 53 61.5 50 62.5 C47 61.5 44 62 41 61 Z"/>`];
+  const brows = [['M37 38 L45 37', 'M55 37 L63 38'], ['M37 39 L45 36.5', 'M55 36.5 L63 39'], ['M37 37 C40 35 43 35 45 36.5', 'M55 36.5 C57 35 60 35 63 37']][brow];
+  const mouths = ['M44 63 C47 64.5 53 64.5 56 63', 'M44 62.5 C47 66 53 66 56 62.5', 'M45 63.5 L55 63.5'][mouth];
+  const eyes = eye ? `<ellipse cx="41.5" cy="45" rx="3" ry="2.1" fill="${ink}"/><ellipse cx="58.5" cy="45" rx="3" ry="2.1" fill="${ink}"/>`
+    : `<path d="M38 45.5 C40 43 43.5 43 45 45.5 C43.5 46.8 40 46.8 38 45.5 Z M55 45.5 C56.5 43 60 43 62 45.5 C60 46.8 56.5 46.8 55 45.5 Z" fill="${ink}"/>`;
+  return `<svg viewBox="0 0 100 112" aria-hidden="true"><defs>
+    <clipPath id="${id}t"><path d="${torso}"/></clipPath><clipPath id="${id}f"><path d="${jaw}"/></clipPath>
+    <linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient></defs>
+    <path d="${torso}" fill="${k.c1}"/><g clip-path="url(#${id}t)">${pat}<path d="M0 78 H100 V112 H0 Z" fill="url(#${id}g)"/></g>
+    <path d="${torso}" fill="none" stroke="rgba(0,0,0,.3)" stroke-width="1.5"/>
+    <path d="M40 72 L42 84 C46 88 54 88 58 84 L60 72 Z" fill="currentColor" opacity=".78"/><path d="M41 74 C46 79 54 79 59 74 L59 78 C54 82 46 82 41 78 Z" fill="${soft}"/>
+    <path d="M38 81 L50 92 L62 81" fill="none" stroke="${k.p === 'solid' ? k.c2 : '#fff'}" stroke-width="3" stroke-linejoin="round"/>
+    <g fill="currentColor" opacity=".9"><ellipse cx="29.5" cy="47" rx="4" ry="6.5"/><ellipse cx="70.5" cy="47" rx="4" ry="6.5"/></g>
+    <path d="M28.5 44 C30 46 30 49 29 51 M71.5 44 C70 46 70 49 71 51" fill="none" stroke="${soft}" stroke-width="1.2"/>
+    <path d="${jaw}" fill="currentColor"/>
+    <g clip-path="url(#${id}f)"><path d="M50 10 C64 14 74 30 72 50 C70 66 62 76 50 80 L80 80 L80 10 Z" fill="rgba(0,0,0,.14)"/><ellipse cx="40" cy="34" rx="9" ry="6" fill="#fff" opacity=".18"/></g>
+    <g fill="none" stroke="${ink}" stroke-width="2.6" stroke-linecap="round">${brows.map(d => `<path d="${d}"/>`).join('')}</g>
+    ${eyes}<circle cx="42.6" cy="44.4" r=".8" fill="#fff" opacity=".8"/><circle cx="59.6" cy="44.4" r=".8" fill="#fff" opacity=".8"/>
+    <path d="M50 46 L48 55 C49 56.5 52 56.5 53 55.5" fill="none" stroke="${soft}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${mouths}" fill="none" stroke="${ink}" stroke-width="2" stroke-linecap="round"/>
+    <g fill="${ink}" opacity=".85">${beards[beard]}</g>
+    <g fill="#1d1d1f" opacity=".82">${hairs[style]}</g>
   </svg>`;
 }
 

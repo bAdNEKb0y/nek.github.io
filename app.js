@@ -1,4 +1,5 @@
 import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, customTeam } from './data.js';
+import { predictOwn } from './predict.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
@@ -623,6 +624,7 @@ function frame(now) {
       const key = JSON.stringify([+mine.jx.toFixed(2), +mine.jy.toFixed(2), +mine.m.toFixed(2), mine.a, mine.b, mine.d, mine.r]);
       if (key !== g.lastSent || now - g.sentAt > 60) { ROOM?.send('i', mine, true); g.lastSent = key; g.sentAt = now; }
       g.V = interp(g.snaps, now) || g.V;
+      predictOwn(g, mine, dt, now, ROOM?.rtt);
       if (now - g.lastSnapAt > 15000 && !ROOM?.peer) g.forfeit(true, 'Ton adversaire s\'est déconnecté.');
       if (g.V?.end && !g.endTimer) g.endTimer = setTimeout(() => { if (!g.done) finishGame({ score: g.V.sc, partial: true }); }, 3000);
     }
