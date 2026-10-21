@@ -213,6 +213,29 @@ export function createRenderer(canvas) {
   }
 
   const trail = [], ANIM = [];
+  /** Cible au sol : où le ballon en l'air va retomber */
+  function drawLanding(V) {
+    const lx = V.b[6], ly = V.b[7], tl = V.b[8];
+    if (lx == null || lx < 0 || !(V.b[5] > .3)) return;
+    const x = sx(lx, ly), y = sy(lx, ly), base = Math.max(7, R.S * 2.2);
+    const pulse = 1 + Math.sin(performance.now() / 110) * .12;
+    const rr2 = base * (1 + Math.min(1.2, tl) * .6) * pulse; // se resserre à l'approche
+    const col = V.b[3] < 0 ? '#ffe08a' : '#ffffff';
+    ctx.save();
+    ctx.strokeStyle = col; ctx.globalAlpha = .9; ctx.lineWidth = Math.max(2, R.S * .35);
+    ctx.setLineDash([R.S * 1.1, R.S * .7]); ctx.lineDashOffset = -performance.now() / 40;
+    ctx.beginPath(); ctx.arc(x, y, rr2, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = .35; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, base * .55, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = .95; ctx.lineWidth = Math.max(1.5, R.S * .25);
+    const c = base * .5;
+    ctx.beginPath(); ctx.moveTo(x - c, y); ctx.lineTo(x + c, y); ctx.moveTo(x, y - c); ctx.lineTo(x, y + c); ctx.stroke();
+    // trajectoire en pointillés entre l'ombre du ballon et la cible
+    const bx = sx(V.b[0], V.b[1]), by = sy(V.b[0], V.b[1]);
+    ctx.globalAlpha = .4; ctx.setLineDash([R.S * .5, R.S * .8]);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(x, y); ctx.stroke();
+    ctx.restore();
+  }
   function drawBall(V) {
     const gx = sx(V.b[0], V.b[1]), gy = sy(V.b[0], V.b[1]), z = V.b[5] || 0;
     const r = Math.max(3.5, BR * R.S * 1.2) * (1 + z * .07), x = gx, y = gy - z * R.S * .9;
@@ -319,6 +342,7 @@ export function createRenderer(canvas) {
     if (!V || !R.ctrl) { ctx.fillStyle = '#0b1411'; ctx.fillRect(0, 0, R.W, R.H); return; }
     drawPitch();
     const order = V.p.map((p, i) => i).sort((a, b) => sy(V.p[a][0], V.p[a][1]) - sy(V.p[b][0], V.p[b][1]));
+    drawLanding(V);
     for (const i of order) drawPlayer(V, M, i);
     drawBall(V);
     for (const q of ui.parts || []) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.globalAlpha = Math.min(1, q.life); ctx.fillStyle = q.c; ctx.fillRect(-q.r, -q.r / 2, q.r * 2, q.r); ctx.restore(); }

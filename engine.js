@@ -520,11 +520,18 @@ export function step(G, inputs, dt) {
 
 /* ---------- Réseau : état compact envoyé par l'hôte ---------- */
 const r2 = v => Math.round(v * 100) / 100;
+/** Point de chute du ballon en l'air (même physique que ballUpdate) : [x, y, temps restant] ou [-1, -1, 0] */
+function landing(b) {
+  if (b.owner || b.z < .3) return [-1, -1, 0];
+  const t = (b.vz + Math.sqrt(b.vz * b.vz + 2 * GRAV * b.z)) / GRAV, k = (1 - Math.exp(-.12 * t)) / .12;
+  let x = b.x + b.vx * k; if (x < BR) x = 2 * BR - x; if (x > FW - BR) x = 2 * (FW - BR) - x; // rebond sur la touche
+  return [r2(clamp(x, BR, FW - BR)), r2(clamp(b.y + b.vy * k, -GD, FL + GD)), r2(t)];
+}
 export function snapshot(G) {
   const b = G.ball;
   return {
     p: G.players.map(p => [r2(p.x), r2(p.y), r2(p.fx), r2(p.fy), p.stun > 0 ? 1 : 0]),
-    b: [r2(b.x), r2(b.y), r2(b.spin), b.owner ? G.players.indexOf(b.owner) : -1, r2(Math.hypot(b.vx, b.vy)), r2(b.z)],
+    b: [r2(b.x), r2(b.y), r2(b.spin), b.owner ? G.players.indexOf(b.owner) : -1, r2(Math.hypot(b.vx, b.vy)), r2(b.z), ...landing(b)],
     sc: G.score, tm: r2(G.time), st: G.state, h: G.half,
     c: G.ctrl.map(p => p ? G.players.indexOf(p) : -1),
     pv: G.preview.map(p => p ? G.players.indexOf(p) : -1),
