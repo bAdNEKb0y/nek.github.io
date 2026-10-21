@@ -150,7 +150,7 @@ function render() {
     el.querySelectorAll('[data-a]').forEach(b => b.onclick = e => { e.stopPropagation(); close(b.dataset.a === 'team' ? 'team' : null); });
   }
 }
-function close(action) { const cb = PK?.onClose; $('#pack').hidden = true; $('#pack').innerHTML = ''; PK = null; cb?.(action); }
+function close(action) { document.querySelectorAll('.confetti,.pk-flash').forEach(x => x.remove()); const cb = PK?.onClose; $('#pack').hidden = true; $('#pack').innerHTML = ''; PK = null; cb?.(action); }
 function reveal() {
   const t = PK.res[PK.i].tier;
   flash(TCOL[t]); sfx.tone(500 + TRANK[t] * 180, .18, 'triangle', .14, 900 + TRANK[t] * 200);

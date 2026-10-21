@@ -364,3 +364,34 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .fc .n{position:relative;z-index:1}
 .walk .wface{width:min(150px,30vh);color:#f3d27a}
 .walk .wface svg{width:100%;height:auto}
+
+/* ---------- Mise en page robuste téléphone / tablette ---------- */
+.row2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.tile,.play-tile,.card,.col>*{min-width:0}
+.tile,.play-tile{grid-template-columns:minmax(0,1fr)}
+.tile b,.play-tile b{overflow-wrap:anywhere}
+.joinrow input{flex:1 1 0;width:auto;min-width:0}
+.joinrow .btn{flex:0 0 auto}
+.kits{flex-wrap:wrap;overflow:visible}
+.topbar{row-gap:8px}
+.hdr-right{flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.me{min-width:0}
+.me b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:44vw;display:block}
+/* Tablette en portrait et téléphones : une seule colonne */
+@media (max-width:900px) and (orientation:portrait),(max-width:700px){
+  .split,.homegrid,.lobbygrid,.endgrid,.clubgrid{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:420px){
+  .tile{padding:13px}
+  .tile b{font-size:20px}
+  .play-tile{padding:18px}
+  .play-tile b{font-size:36px}
+  .hdr-right{width:100%;justify-content:space-between}
+  .me{padding:6px 12px 6px 6px}
+  .me .elo{font-size:20px}
+}
+/* Tablette en portrait : plus d'air */
+@media (min-width:600px) and (max-width:900px) and (orientation:portrait){
+  .homegrid,.lobbygrid,.endgrid,.clubgrid{max-width:680px}
+  .wrap1200{max-width:760px}
+}
