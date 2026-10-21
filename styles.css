@@ -395,3 +395,18 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
   .homegrid,.lobbygrid,.endgrid,.clubgrid{max-width:680px}
   .wrap1200{max-width:760px}
 }
+@media (max-width:480px){
+  .slot{padding:12px 6px}
+  .slot b{font-size:18px}
+  .slot .shirt{width:54px;height:54px}
+  .vsx{font-size:22px}
+  .code{font-size:26px;letter-spacing:.22em}
+}
+.sb-goals:not(:has(li)){display:none}
+@media (max-width:560px){
+  .dboard{padding:10px;gap:4px}
+  .dp{padding:4px}
+  .dp b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+  .dsc{font-size:40px}
+  .dsc small{font-size:11px}
+}

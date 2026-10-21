@@ -115,10 +115,10 @@ const TCOL = { or: '#f3dc8c', rare: '#ffb52e', elite: '#a78bfa', leg: '#fff3c4',
 const rnd = (a, b) => a + Math.random() * (b - a);
 
 /** ids : cartes obtenues ; onClose(action) appelé à la fermeture ('team' | null) */
-export function showPack(type, ids, onClose, title) {
+export function showPack(type, ids, onClose, title, opt = {}) {
   const res = ids.map(id => CARDS[id]).filter(Boolean).sort((a, b) => TRANK[a.tier] - TRANK[b.tier] || a.r - b.r);
   if (!res.length) return;
-  PK = { type, res, stage: 'pack', i: 0, busy: false, onClose, title: title || (PACKS[type]?.n ?? 'Pack') };
+  PK = { type, res, stage: 'pack', i: 0, busy: false, duel: !!opt.duel, onClose, title: title || (PACKS[type]?.n ?? 'Pack') };
   const el = $('#pack'); el.hidden = false; render();
 }
 function flash(col) { const f = document.createElement('div'); f.className = 'pk-flash'; f.style.setProperty('--fl', col); document.body.appendChild(f); setTimeout(() => f.remove(), 800); }
@@ -135,7 +135,7 @@ function render() {
   } else if (PK.stage === 'card') {
     const c = PK.res[PK.i], t = c.tier, hi = TRANK[t] >= 2;
     el.innerHTML = `${hi ? `<div class="rays" style="--ray:${t === 'goat' ? 'rgba(255,90,209,.3)' : t === 'leg' ? 'rgba(255,224,138,.28)' : 'rgba(167,139,250,.22)'}"></div>` : ''}<div class="pk-stage"><div class="pk-count">Carte ${PK.i + 1} / ${PK.res.length} · ${TIER_NAME[t]}</div>
-      <div class="pk-card">${cardHTML(c)}</div><span class="pk-tag new">Nouvelle carte</span>
+      <div class="pk-card">${cardHTML(c)}</div>${PK.duel ? `<span class="pk-tag">+${c.r + ({ or: 0, rare: 3, elite: 10, leg: 25, goat: 60 }[c.tier] || 0)} pts</span>` : '<span class="pk-tag new">Nouvelle carte</span>'}
       <p class="pk-hint">${PK.i < PK.res.length - 1 ? 'Touche pour la carte suivante' : 'Touche pour voir le résumé'}</p></div>`;
   } else if (PK.stage === 'walk') {
     const leg = TRANK[bt] >= 3, k = PK.w;
@@ -144,9 +144,9 @@ function render() {
     el.innerHTML = `<div class="rays" style="--ray:${bt === 'goat' ? 'rgba(255,90,209,.32)' : leg ? 'rgba(255,224,138,.3)' : 'rgba(167,139,250,.25)'}"></div><div class="pk-stage"><div class="walk${leg ? ' leg' : ''}${bt === 'goat' ? ' goat' : ''}">${inner}</div></div>`;
   } else {
     const n = PK.res.length;
-    el.innerHTML = `<div class="pk-stage wide"><div class="pk-count">${esc(PK.title)} · ${n} nouvelle${n > 1 ? 's' : ''} carte${n > 1 ? 's' : ''}</div>
+    el.innerHTML = `<div class="pk-stage wide"><div class="pk-count">${esc(PK.title)} · ${PK.duel ? `${n} carte${n > 1 ? 's' : ''}` : `${n} nouvelle${n > 1 ? 's' : ''} carte${n > 1 ? 's' : ''}`}</div>
       <div class="cgrid">${PK.res.slice().reverse().map(c => cardHTML(c)).join('')}</div>
-      <div class="actions"><button class="btn primary" data-a="team">Mettre dans mon équipe</button><button class="btn" data-a="close">Fermer</button></div></div>`;
+      <div class="actions">${PK.duel ? '<button class="btn primary" data-a="close">Continuer le duel</button>' : '<button class="btn primary" data-a="team">Mettre dans mon équipe</button><button class="btn" data-a="close">Fermer</button>'}</div></div>`;
     el.querySelectorAll('[data-a]').forEach(b => b.onclick = e => { e.stopPropagation(); close(b.dataset.a === 'team' ? 'team' : null); });
   }
 }

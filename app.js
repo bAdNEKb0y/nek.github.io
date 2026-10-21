@@ -400,7 +400,7 @@ function duelRound(m) {
   const D = DUEL; if (!D || m.r <= D.r) return;
   D.r = m.r; D.cur = m.packs; D.opened = [false, false];
   renderDuel();
-  showPack(D.type, m.packs[D.side], () => { D.opened[D.side] = true; ROOM?.send('dopen', { r: D.r }); settleDuelRound(); }, `Manche ${D.r} · ${PACKS[D.type].n}`);
+  showPack(D.type, m.packs[D.side], () => { D.opened[D.side] = true; ROOM?.send('dopen', { r: D.r }); settleDuelRound(); }, `Manche ${D.r} · ${PACKS[D.type].n}`, { duel: true });
 }
 function settleDuelRound() {
   const D = DUEL; if (!D) return;
@@ -452,7 +452,7 @@ function renderDuel() {
   } else if (D.cur?.settled) {
     if (me === 0) mk('Manche suivante', 'primary', () => nextDuelRound());
     else acts.insertAdjacentHTML('beforeend', `<p class="hint">${esc(D.names[0])} lance la manche suivante…</p>`);
-  } else if (D.cur && !D.opened[me]) mk('Ouvrir mon pack', 'primary', () => showPack(D.type, D.cur[me], () => { D.opened[me] = true; ROOM?.send('dopen', { r: D.r }); settleDuelRound(); }, `Manche ${D.r} · ${PACKS[D.type].n}`));
+  } else if (D.cur && !D.opened[me]) mk('Ouvrir mon pack', 'primary', () => showPack(D.type, D.cur[me], () => { D.opened[me] = true; ROOM?.send('dopen', { r: D.r }); settleDuelRound(); }, `Manche ${D.r} · ${PACKS[D.type].n}`, { duel: true }));
   if (!D.done) mk('Quitter le duel', '', () => { ROOM?.send('dquit', {}); DUEL = null; if (LOB) { LOB.ready = false; ROOM?.setState({ ready: false }); renderLobby(); show('lobby'); } });
   $('#dHist').innerHTML = D.hist.length ? `<h3>Manches</h3>${D.hist.map(h => `<div class="hrow"><span class="${h.w === me ? 'win' : ''}">${esc(D.names[me])} <b>${h.s[me]}</b></span><small>M${h.r}</small><span class="${h.w === op ? 'win' : ''}"><b>${h.s[op]}</b> ${esc(D.names[op])}</span></div>`).join('')}` : '';
 }
@@ -702,7 +702,7 @@ function renderEnd(g, sum, rating) {
       <div class="sc">${myS}<i>–</i>${opS}</div>
       <div class="side"><div class="shirt">${shirtSVG(M.kit[op])}</div><b>${esc(M.team[op].name)}</b><small>${esc(g.names[op])}</small></div>
     </div>
-    ${sum.players ? `<div class="sb-goals"><ul>${goals(me)}</ul><ul>${goals(op)}</ul></div>` : ''}
+    ${sum.players && sum.scorers?.length ? `<div class="sb-goals"><ul>${goals(me)}</ul><ul>${goals(op)}</ul></div>` : ''}
   </div>
   <div class="verdict ${res}">${res === 'w' ? 'Victoire !' : res === 'l' ? 'Défaite' : 'Match nul'}</div>${sum.msg ? `<p class="hint">${esc(sum.msg)}</p>` : ''}`;
   $('#endRating').innerHTML = rating ? `<div class="rating"><span>Classement</span><b>${rating.after}</b><span class="d ${rating.after >= rating.before ? 'up' : 'down'}">${rating.after >= rating.before ? '+' : ''}${rating.after - rating.before}</span><span class="coins" style="margin-left:auto">+${rating.coins}</span></div>` : g.online ? '' : '<p class="hint">Les matchs d\'entraînement ne comptent pas au classement.</p>';
