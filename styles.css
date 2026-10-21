@@ -357,3 +357,10 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .winner small{font-family:var(--f-display);font-weight:800;letter-spacing:.18em;text-transform:uppercase;font-size:14px}
 .winner b{font-family:var(--f-display);font-weight:800;font-size:clamp(44px,8vw,72px);line-height:.9;text-transform:uppercase;word-break:break-word}
 @media (max-width:760px){.dround{grid-template-columns:1fr}.dvs{justify-self:center}}
+
+/* Portraits sur les cartes */
+.fc .face{width:78%;margin-top:16%;color:var(--fg);filter:drop-shadow(0 3px 4px rgba(0,0,0,.25))}
+.fc .face svg{width:100%;height:auto;display:block}
+.fc .n{position:relative;z-index:1}
+.walk .wface{width:min(150px,30vh);color:#f3d27a}
+.walk .wface svg{width:100%;height:auto}
