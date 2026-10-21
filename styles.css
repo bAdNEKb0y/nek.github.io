@@ -410,3 +410,25 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
   .dsc{font-size:40px}
   .dsc small{font-size:11px}
 }
+
+/* ---------- Tutoriel ---------- */
+.overlay.tuto{z-index:12;padding:max(12px,env(safe-area-inset-top,0px)) 12px max(12px,env(safe-area-inset-bottom,0px));background:rgba(4,8,6,.88);backdrop-filter:blur(4px)}
+.tbox{width:min(560px,100%);max-height:100%;overflow-y:auto;display:grid;gap:10px;padding:16px;border-radius:18px;background:var(--panel);border:1px solid var(--line);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.thead{display:flex;justify-content:space-between;align-items:center;font-family:var(--f-display);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--flood);font-size:13px}
+.thead .link{padding:2px 0}
+.tart{border-radius:14px;overflow:hidden;background:var(--night)}
+.tart svg{display:block;width:100%;height:auto}
+.tbox h2{font-size:28px;line-height:1}
+.tbox p{margin:0;color:#c9d6cf;font-size:15px;line-height:1.45}
+.tdots{display:flex;gap:6px;justify-content:center}
+.tdots i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.tdots i.on{background:var(--flood);width:22px;border-radius:4px}
+.tnav{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
+.tnav .btn[disabled]{opacity:.4}
+.tuto-tile{background:linear-gradient(130deg,rgba(255,201,74,.12),var(--panel) 70%);border-color:rgba(255,201,74,.35)}
+@media (max-height:500px) and (orientation:landscape){
+  .tbox{width:min(760px,100%);grid-template-columns:1.1fr 1fr;align-items:center;column-gap:16px}
+  .thead,.tdots,.tnav{grid-column:1/-1}
+  .tart{grid-row:2/5}
+  .tbox h2{font-size:24px}.tbox p{font-size:14px}
+}

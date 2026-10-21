@@ -1,5 +1,6 @@
 import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, customTeam } from './data.js';
 import { predictOwn } from './predict.js';
+import { openTuto, tutoSeen } from './tuto.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
@@ -31,6 +32,7 @@ function playEvent(type, val) {
   else if (type === 'save') tone(220, .08, 'sine', .12);
   else if (type === 'steal') tone(90, .12, 'sawtooth', .12, 50);
   else if (type === 'header') tone(260, .1, 'sine', .2, 160);
+  else if (type === 'bicycle') { tone(120, .2, 'sawtooth', .2, 60); setTimeout(() => cheer(), 120); buzz([30, 30, 60]); }
   else if (type === 'cross') tone(180, .12, 'triangle', .14, 90);
 }
 
@@ -79,7 +81,8 @@ async function afterLogin() {
   if (!ME) { show('auth'); return; }
   await loadCollection();
   renderHome(); show('home');
-  if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (a === 'team') openClub(); }, 'Pack de bienvenue');
+  if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
+  else if (!tutoSeen()) openTuto();
   const q = new URLSearchParams(location.search).get('salle');
   if (q) { history.replaceState(null, '', location.pathname); enterRoom(cleanCode(q), 'guest'); }
 }
@@ -132,7 +135,8 @@ $('#joinForm').addEventListener('submit', e => {
   if (c.length !== 4) { $('#homeErr').textContent = 'Le code d\'une salle fait 4 caractères.'; return; }
   $('#joinCode').value = ''; enterRoom(c, 'guest');
 });
-$('#bSolo').addEventListener('click', () => { audio(); startSolo(); });
+$('#bSolo').addEventListener('click', () => { audio(); if (!tutoSeen()) openTuto(startSolo); else startSolo(); });
+$('#bTuto').addEventListener('click', () => openTuto());
 
 /* ---------- Collection, packs et équipe perso ---------- */
 let COL = null, clockOffset = 0;
@@ -470,7 +474,12 @@ async function keepAwake() { try { wake = await navigator.wakeLock?.request('scr
 /* ---------- Commandes ---------- */
 const cv = $('#cv');
 const R = createRenderer(cv);
-const LI = { tx: 0, ty: 0, joyOn: false, jox: 0, joy: 0, jlx: 0, jly: 0, klx: 0, kly: 0, a: 0, b: 0, rel: 0, relCharge: 0, bDown: false, aFlash: 0 };
+const LI = { tx: 0, ty: 0, joyOn: false, jox: 0, joy: 0, jlx: 0, jly: 0, klx: 0, kly: 0, a: 0, l: 0, b: 0, rel: 0, relCharge: 0, bDown: false, aFlash: 0, aDown: false, aT: 0 };
+const LOB_MS = 320; // appui long sur PASSE = ballon en l'air
+/** PASSE : sans ballon on agit tout de suite (changer de joueur) ; avec le ballon on attend le relâchement (court = passe, long = en l'air) */
+function myBall() { const V = GAME?.V; if (!V) return false; const own = V.b[3], me = GAME.side; return own >= 0 && (own === V.c[me] || (GAME.M.players[own].gk && GAME.M.players[own].t === me)); }
+function aPress() { if (myBall()) { LI.aDown = true; LI.aT = performance.now(); } else { LI.a++; LI.aFlash = .15; buzz(8); } }
+function aRelease() { if (!LI.aDown) return; LI.aDown = false; if (performance.now() - LI.aT >= LOB_MS) { LI.l++; buzz([10, 30, 18]); } else { LI.a++; buzz(8); } LI.aFlash = .15; }
 const ptrs = new Map();
 function hit(x, y) {
   const g = R.ctrl;
@@ -496,7 +505,7 @@ cv.addEventListener('pointerdown', e => {
   ptrs.set(e.pointerId, k);
   try { cv.setPointerCapture(e.pointerId); } catch { }
   if (k === 'B') { LI.bDown = true; LI.b++; }
-  else if (k === 'A') { LI.a++; LI.aFlash = .15; buzz(8); }
+  else if (k === 'A') aPress();
   else { LI.joyOn = true; LI.jox = LI.jlx = x; LI.joy = LI.jly = y; updJoy(); }
 });
 cv.addEventListener('pointermove', e => { if (ptrs.get(e.pointerId) !== 'J') return; e.preventDefault(); const [x, y] = xy(e); LI.jlx = x; LI.jly = y; updJoy(); });
@@ -504,6 +513,7 @@ function up(e) {
   const k = ptrs.get(e.pointerId); if (!k) return; ptrs.delete(e.pointerId);
   if (k === 'J') { LI.joyOn = false; LI.tx = LI.ty = 0; LI.klx = LI.kly = 0; }
   else if (k === 'B') { LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
+  else if (k === 'A') aRelease();
 }
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 cv.addEventListener('contextmenu', e => e.preventDefault());
@@ -512,13 +522,14 @@ addEventListener('keydown', e => {
   if (!GAME || $('#game').hidden) return;
   if (e.repeat) { e.preventDefault(); return; }
   KEYS[e.code] = true; audio();
-  if (e.code === 'KeyJ' || e.code === 'KeyF') { LI.a++; LI.aFlash = .15; }
+  if ((e.code === 'KeyJ' || e.code === 'KeyF') && !e.repeat) aPress();
   if (e.code === 'KeyK' || e.code === 'KeyG' || e.code === 'Space') { LI.bDown = true; LI.b++; }
   if (e.code === 'Escape') openMenu();
   if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
 });
 addEventListener('keyup', e => {
   KEYS[e.code] = false;
+  if (e.code === 'KeyJ' || e.code === 'KeyF') aRelease();
   if ((e.code === 'KeyK' || e.code === 'KeyG' || e.code === 'Space') && LI.bDown) { LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
 });
 /** Entrée locale en coordonnées terrain */
@@ -527,15 +538,15 @@ function localWorldInput() {
   let v = LI.ty + ((KEYS.KeyS || KEYS.ArrowDown) ? 1 : 0) - ((KEYS.KeyW || KEYS.ArrowUp) ? 1 : 0);
   const m = Math.hypot(u, v); if (m > 1) { u /= m; v /= m; }
   const [jx, jy] = R.toWorld(u, v);
-  return { jx, jy, m: Math.min(1, m), a: LI.a, b: LI.b, d: LI.bDown, r: LI.rel, rc: LI.relCharge };
+  return { jx, jy, m: Math.min(1, m), a: LI.a, l: LI.l, b: LI.b, d: LI.bDown, r: LI.rel, rc: LI.relCharge };
 }
 /** Transforme un état d'entrée (compteurs) en fronts pour le moteur */
 function toEngine(raw, prev) {
   if (!raw) return blankInput();
   const I = { jx: raw.jx || 0, jy: raw.jy || 0, mag: clamp(raw.m || 0, 0, 1), bDown: !!raw.d, relCharge: clamp(raw.rc || 0, 0, 1),
-    a: raw.a > prev.a, b: raw.b > prev.b, rel: raw.r > prev.r };
+    a: raw.a > prev.a, lob: (raw.l || 0) > (prev.l || 0), b: raw.b > prev.b, rel: raw.r > prev.r };
   if (I.mag > 0 && Math.hypot(I.jx, I.jy) > 0) { const n = Math.hypot(I.jx, I.jy); I.jx = I.jx / n * I.mag; I.jy = I.jy / n * I.mag; }
-  prev.a = raw.a; prev.b = raw.b; prev.r = raw.r;
+  prev.a = raw.a; prev.l = raw.l || 0; prev.b = raw.b; prev.r = raw.r;
   return I;
 }
 
@@ -547,7 +558,7 @@ function metaOf(cfg, humans, names) {
   for (let t = 0; t < 2; t++) team[t].sq.forEach((q, i) => players.push({ t, i, gk: i === 0, num: q[1], name: q[0], r: q[2] }));
   return { team, kit: pickKits(team[0], team[1]), players, humans, names, dur: cfg.dur };
 }
-function resetLocalInput() { Object.assign(LI, { tx: 0, ty: 0, joyOn: false, a: 0, b: 0, rel: 0, relCharge: 0, bDown: false }); ptrs.clear(); }
+function resetLocalInput() { Object.assign(LI, { tx: 0, ty: 0, joyOn: false, a: 0, l: 0, b: 0, rel: 0, relCharge: 0, bDown: false, aDown: false }); ptrs.clear(); }
 
 function startSolo() {
   const custom = ME?.fav_team === 'PERSO' && COL;
@@ -564,7 +575,7 @@ function beginGame({ cfg, side, online, names, uids }) {
   const M = metaOf(cfg, humans, names);
   const g = {
     cfg, side, online, M, names, uids, V: null, parts: [], lastEv: 0, localCharge: 0, net: ROOM?.linkInfo(),
-    remote: null, prevL: { a: 0, b: 0, r: 0 }, prevR: { a: 0, b: 0, r: 0 }, snaps: [], lastSnapAt: performance.now(),
+    remote: null, prevL: { a: 0, l: 0, b: 0, r: 0 }, prevR: { a: 0, l: 0, b: 0, r: 0 }, snaps: [], lastSnapAt: performance.now(),
     acc: 0, tick: 0, sentAt: 0, lastSent: '', done: false, peerGoneAt: 0, endData: null,
   };
   if (side === 0) g.G = createMatch({ teams: M.team, dur: cfg.dur, humans, diff: 1 });
@@ -589,7 +600,7 @@ function interp(snaps, now) {
   if (!b) return a.s;
   const k = clamp((t - a.at) / (b.at - a.at || 1), 0, 1), A = a.s, B = b.s;
   const lerp = (x, y) => x + (y - x) * k;
-  return { ...B, p: B.p.map((p, i) => [lerp(A.p[i][0], p[0]), lerp(A.p[i][1], p[1]), p[2], p[3], p[4]]),
+  return { ...B, p: B.p.map((p, i) => [lerp(A.p[i][0], p[0]), lerp(A.p[i][1], p[1]), p[2], p[3], p[4], p[5] || 0]),
     b: [lerp(A.b[0], B.b[0]), lerp(A.b[1], B.b[1]), B.b[2], B.b[3], B.b[4], lerp(A.b[5] || 0, B.b[5] || 0), B.b[6] ?? -1, B.b[7] ?? -1, B.b[8] ?? 0], tm: lerp(A.tm, B.tm) };
 }
 
@@ -623,7 +634,7 @@ function frame(now) {
       }
     } else {
       // Invité : envoie ses entrées, affiche l'état reçu
-      const key = JSON.stringify([+mine.jx.toFixed(2), +mine.jy.toFixed(2), +mine.m.toFixed(2), mine.a, mine.b, mine.d, mine.r]);
+      const key = JSON.stringify([+mine.jx.toFixed(2), +mine.jy.toFixed(2), +mine.m.toFixed(2), mine.a, mine.l, mine.b, mine.d, mine.r]);
       if (key !== g.lastSent || now - g.sentAt > 60) { ROOM?.send('i', mine, true); g.lastSent = key; g.sentAt = now; }
       g.V = interp(g.snaps, now) || g.V;
       predictOwn(g, mine, dt, now, ROOM?.rtt);
@@ -639,6 +650,7 @@ function frame(now) {
         if (s <= g.lastEv) continue;
         g.lastEv = s; playEvent(type, val);
         if (type === 'goal') g.parts.push(...R.goalBurst(val, g.M));
+        if (type === 'bicycle') g.parts.push(...R.burstAt(g.V, g.M));
       }
     }
     for (const q of g.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 300 * dt; q.rot += dt * 6; q.life -= dt; }

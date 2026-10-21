@@ -35,7 +35,7 @@ export function predictOwn(g, mine, dt, now, rtt) {
   // Écrit la position prédite dans la vue (et le ballon s'il est collé au joueur)
   const iv = V.p[ci], dx = P.x - iv[0], dy = P.y - iv[1];
   const spd = Math.hypot(P.vx, P.vy);
-  const p = V.p.slice(); p[ci] = [P.x, P.y, spd > 1.5 ? P.vx / spd : iv[2], spd > 1.5 ? P.vy / spd : iv[3], iv[4]];
+  const p = V.p.slice(); p[ci] = [P.x, P.y, spd > 1.5 ? P.vx / spd : iv[2], spd > 1.5 ? P.vy / spd : iv[3], iv[4], iv[5] || 0];
   let b = V.b;
   if (V.b[3] === ci) b = [V.b[0] + dx, V.b[1] + dy, V.b[2], V.b[3], V.b[4], V.b[5] || 0, -1, -1, 0];
   g.V = { ...V, p, b };

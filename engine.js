@@ -35,7 +35,7 @@ export function pickKits(A, B) {
   return [kA, kB];
 }
 
-export const blankInput = () => ({ jx: 0, jy: 0, mag: 0, a: false, b: false, bDown: false, rel: false, relCharge: 0 });
+export const blankInput = () => ({ jx: 0, jy: 0, mag: 0, a: false, lob: false, b: false, bDown: false, rel: false, relCharge: 0 });
 
 /**
  * cfg: { teams: [équipe0, équipe1] (ou t0, t1 = index dans TEAMS), dur (s), humans: [bool,bool], diff (0..2) }
@@ -50,7 +50,7 @@ export function createMatch(cfg) {
     score: [0, 0], time: 0, dur: cfg.dur, half: 1, state: 'kickoff', stateT: 0, nextKick: 0,
     ctrl: [null, null], chaser: [null, null], cover: [null, null], preview: [null, null], charge: [0, 0],
     stats: { shots: [0, 0], onT: [0, 0], poss: [0, 0] }, scorers: [],
-    passTarget: null, passT: 0, events: [], evSeq: 0, banner: null, ended: false,
+    passTarget: null, passT: 0, events: [], evSeq: 0, banner: null, ended: false, land: null, hold: [false, false],
   };
   for (let t = 0; t < 2; t++) for (let i = 0; i < 5; i++) {
     const sq = team[t].sq[i];
@@ -108,7 +108,7 @@ function giveBall(G, p) {
   if (p.gk) p.holdT = 1.0;
 }
 function kick(G, p, vx, vy, power, vz = 0) {
-  const b = G.ball; b.owner = null; b.vx = vx; b.vy = vy; b.vz = vz; b.z = vz ? .2 : 0; b.cross = false; p.kcd = .32; b.last = p; p.holdT = 0;
+  const b = G.ball; b.owner = null; b.vx = vx; b.vy = vy; b.vz = vz; b.z = vz ? .2 : 0; b.lift = vz > 4 ? .16 : 0; b.cross = false; p.kcd = .32; b.last = p; p.holdT = 0;
   ev(G, 'kick', { pw: power });
 }
 const GRAV = 30;
@@ -154,6 +154,19 @@ function header(G, p) {
   const b = G.ball, gy = atkY(p.t), d = dirOf(p.t);
   const attacking = toGoalOf(p.t, p.y) < 24 && Math.abs(p.x - CX) < 17;
   p.kcd = .4;
+  // Retournée acrobatique : réservée aux joueurs notés 92 et plus
+  const human = isCtrl(G, p);
+  if (attacking && p.r >= 92 && b.z > 1.1 && (human ? G.hold[p.t] : Math.random() < .4)) {
+    const tm = T(G, p), gk = G.byTeam[1 - p.t][0];
+    const aimX = CX + (gk.x > CX ? -1 : 1) * rnd(3, GH - 1);
+    const a = Math.atan2(gy - b.y, aimX - b.x) + gauss() * (1.12 - (tm.att + pb(G, p)) / 100) * .32;
+    const sp = 38 + (p.r - 92) * 1.5 + rnd(0, 6);
+    p.st.tir++; G.stats.shots[p.t]++;
+    kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, 1.5, rnd(0, 2.5));
+    const vy = Math.sin(a) * sp; if (vy) { const tt = (gy - b.y) / vy; if (tt > 0 && Math.abs(b.x + Math.cos(a) * sp * tt - CX) < GH) G.stats.onT[p.t]++; }
+    p.flip = .7; ev(G, 'bicycle', {}); banner(G, 'RETOURNÉE !', p.name, 1.1, p.t); G.passTarget = null;
+    return;
+  }
   if (attacking) {
     const tm = T(G, p), gk = G.byTeam[1 - p.t][0];
     const aimX = CX + (gk.x > CX ? -1 : 1) * rnd(2, GH - 1.2);
@@ -211,6 +224,18 @@ function choosePass(G, p, dx, dy) {
   }
   return best || fb;
 }
+/** Passe longue : partenaire loin dans la direction visée */
+function chooseLongPass(G, p, dx, dy) {
+  let best = null, bs = -1e9;
+  for (const m of G.byTeam[p.t]) {
+    if (m === p || m.gk) continue;
+    const vx = m.x - p.x, vy = m.y - p.y, d = hyp(vx, vy); if (d < 8) continue;
+    const ang = Math.acos(clamp((vx * dx + vy * dy) / d, -1, 1));
+    const s = -ang * 2.2 + Math.min(d, 55) / 14 + (inBox(p.t, m.x, m.y) ? .6 : 0);
+    if (ang < 1.3 && s > bs) { bs = s; best = m; }
+  }
+  return best || choosePass(G, p, dx, dy);
+}
 function bestPassTarget(G, p, allowBack) {
   let best = null, bs = -1e9; const d = dirOf(p.t), opp = G.byTeam[1 - p.t];
   for (const m of G.byTeam[p.t]) {
@@ -231,19 +256,21 @@ function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, l =
 /* ---------- Joueur humain ---------- */
 function humanControl(G, t, I, dt) {
   const b = G.ball, own = b.owner;
+  G.hold[t] = !!I.bDown;
   let c = G.ctrl[t];
   if (own && own.t === t && !own.gk && own !== c) c = G.ctrl[t] = own;
   if (!c || c.gk) c = G.ctrl[t] = nearestToBall(G, t, null);
   const mag = Math.min(1, I.mag);
   if (c.stun > 0) steer(c, 0, 0, dt, 4);
   else if (mag > .12) { const sp = maxSp(G, c) * (.5 + .5 * mag); steer(c, I.jx / I.mag * sp, I.jy / I.mag * sp, dt); }
-  else if (!own && G.passTarget === c) moveTo(G, c, b.x + b.vx * .25, b.y + b.vy * .25, 1, dt);
+  else if (!own && (G.passTarget === c || G.land)) { const q = G.land || [b.x + b.vx * .25, b.y + b.vy * .25]; moveTo(G, c, q[0], q[1], 1, dt); } // sans joystick, il va au point de chute
   else steer(c, 0, 0, dt);
 
   if (own === c) {
     const dx = mag > .3 ? I.jx / I.mag : c.fx, dy = mag > .3 ? I.jy / I.mag : c.fy;
     G.preview[t] = choosePass(G, c, dx, dy);
-    if (I.a) { passTo(G, c, G.preview[t]); G.charge[t] = 0; G.preview[t] = null; }
+    if (I.lob) { passTo(G, c, chooseLongPass(G, c, dx, dy), { loft: true }); G.charge[t] = 0; G.preview[t] = null; }
+    else if (I.a) { passTo(G, c, G.preview[t]); G.charge[t] = 0; G.preview[t] = null; }
     else {
       if (I.bDown) G.charge[t] = Math.min(1, G.charge[t] + dt / .85);
       if (I.rel) {
@@ -254,9 +281,9 @@ function humanControl(G, t, I, dt) {
     }
   } else {
     G.preview[t] = null; G.charge[t] = 0;
-    if (own && own.gk && own.t === t && I.a) {
+    if (own && own.gk && own.t === t && (I.a || I.lob)) {
       const dx = mag > .3 ? I.jx / I.mag : 0, dy = mag > .3 ? I.jy / I.mag : dirOf(t);
-      passTo(G, own, choosePass(G, own, dx, dy));
+      if (I.lob) passTo(G, own, chooseLongPass(G, own, dx, dy), { loft: true }); else passTo(G, own, choosePass(G, own, dx, dy));
     } else if (I.a) switchPlayer(G, t);
     if (I.b) tackle(G, c);
   }
@@ -377,13 +404,14 @@ function aiGK(G, p, dt) {
 function aiField(G, p, dt) {
   const b = G.ball, own = b.owner, A = G.ai[p.t];
   p.offT -= dt; if (p.offT <= 0) { p.offT = rnd(1.5, 3); p.ox = rnd(-4, 4); p.oy = rnd(-3, 3); }
-  if (!own && G.passTarget === p) { const q = G.passPt && b.z > .3 ? G.passPt : [b.x + b.vx * .3, b.y + b.vy * .3]; moveTo(G, p, q[0], q[1], 1, dt); return; }
+  if (!own && G.passTarget === p) { const q = G.land || [b.x + b.vx * .3, b.y + b.vy * .3]; moveTo(G, p, q[0], q[1], 1, dt); return; }
   const possess = own && own.t === p.t;
   if (possess) { const h = homeTarget(G, p, true); moveTo(G, p, h[0], h[1], .85, dt); return; }
   const gkHas = own && own.gk;
   if (!own && b.cross && G.passPt && G.passTarget && G.passTarget.t !== p.t && !p.gk && p.i <= 2 && G.cover[p.t] !== p) { moveTo(G, p, G.passPt[0], G.passPt[1], 1, dt); return; }
   if (!gkHas && G.chaser[p.t] === p) {
-    moveTo(G, p, b.x + b.vx * .3, b.y + b.vy * .3, G.cfg.humans[p.t] ? .85 : 1, dt);
+    const q = G.land || [b.x + b.vx * .3, b.y + b.vy * .3];
+    moveTo(G, p, q[0], q[1], G.land ? 1 : G.cfg.humans[p.t] ? .85 : 1, dt);
     if (own && dist(p, b) < 3.3) { p.aiT -= dt; if (p.aiT <= 0) { p.aiT = A.react * rnd(.8, 1.6); if (Math.random() < .32 * A.tack) tackle(G, p); } }
     return;
   }
@@ -426,6 +454,7 @@ function ballUpdate(G, dt) {
     else goalKick(G, top ? 1 : 0);
     return;
   }
+  if (b.lift > 0) { b.lift -= dt; return; } // le ballon décolle : personne ne peut le toucher
   let cand = null, cd = 1e9;
   for (const p of G.players) {
     if (p.kcd > 0 || p.stun > 0) continue;
@@ -438,7 +467,12 @@ function ballUpdate(G, dt) {
   if (cand) {
     const p = cand;
     const box = p.gk && Math.abs(p.y - ownY(p.t)) < 15 && Math.abs(p.x - CX) < 19;
-    if (b.z > .9 && !box) { header(G, p); return; }
+    if (b.z > .9 && !box) {
+      // un coéquipier contrôle de la poitrine ; dans la surface adverse sur un centre, on reprend de la tête
+      const mate = b.last && b.last.t === p.t, shotZone = toGoalOf(p.t, p.y) < 22 && Math.abs(p.x - CX) < 16;
+      if (mate && !(shotZone && (b.cross || p.r >= 92))) { giveBall(G, p); ev(G, 'control', {}); return; }
+      header(G, p); return;
+    }
     if (box && b.z > .9) { if (Math.random() < .8 + G.ai[p.t].gk) { p.st.arr++; giveBall(G, p); ev(G, 'save', {}); } else { p.kcd = .5; b.vx = -b.vx * .3 + rnd(-8, 8); b.vy = -b.vy * .3; b.vz = 4; } return; }
     if (box && sp > 14) {
       const ch = clamp(.84 - (sp - 28) / 45 + (T(G, p).def - 75) / 120 + G.ai[p.t].gk, .15, .96);
@@ -494,7 +528,8 @@ export function step(G, inputs, dt) {
   const b = G.ball;
   if (b.owner) G.stats.poss[b.owner.t] += dt;
   if (G.passT > 0) { G.passT -= dt; if (G.passT <= 0) G.passTarget = null; }
-  const px = b.x + b.vx * .3, py = b.y + b.vy * .3;
+  const L = landing(b); G.land = L[0] >= 0 && L[1] > 0 && L[1] < FL ? [L[0], L[1]] : null;
+  const px = G.land ? G.land[0] : b.x + b.vx * .3, py = G.land ? G.land[1] : b.y + b.vy * .3;
   for (let t = 0; t < 2; t++) {
     const cand = G.byTeam[t].filter(p => !p.gk && !isCtrl(G, p)).sort((a, q) => hyp(a.x - px, a.y - py) - hyp(q.x - px, q.y - py));
     G.chaser[t] = cand[0] || null; G.cover[t] = cand[1] || null;
@@ -508,7 +543,7 @@ export function step(G, inputs, dt) {
     if (p.gk) { p.y = p.t === 0 ? Math.max(p.y, FL - 16) : Math.min(p.y, 16); p.x = clamp(p.x, CX - 20, CX + 20); }
     const sp = hyp(p.vx, p.vy);
     if (sp > 1.2) { const k = Math.min(1, dt * (b.owner === p ? 7 : 12)); p.fx += (p.vx / sp - p.fx) * k; p.fy += (p.vy / sp - p.fy) * k; const l = hyp(p.fx, p.fy) || 1; p.fx /= l; p.fy /= l; }
-    if (p.kcd > 0) p.kcd -= dt; if (p.tcd > 0) p.tcd -= dt; if (p.stun > 0) p.stun -= dt;
+    if (p.kcd > 0) p.kcd -= dt; if (p.tcd > 0) p.tcd -= dt; if (p.stun > 0) p.stun -= dt; if (p.flip > 0) p.flip -= dt;
   }
   const P = G.players;
   for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
@@ -530,7 +565,7 @@ function landing(b) {
 export function snapshot(G) {
   const b = G.ball;
   return {
-    p: G.players.map(p => [r2(p.x), r2(p.y), r2(p.fx), r2(p.fy), p.stun > 0 ? 1 : 0]),
+    p: G.players.map(p => [r2(p.x), r2(p.y), r2(p.fx), r2(p.fy), p.stun > 0 ? 1 : 0, p.flip > 0 ? r2(p.flip) : 0]),
     b: [r2(b.x), r2(b.y), r2(b.spin), b.owner ? G.players.indexOf(b.owner) : -1, r2(Math.hypot(b.vx, b.vy)), r2(b.z), ...landing(b)],
     sc: G.score, tm: r2(G.time), st: G.state, h: G.half,
     c: G.ctrl.map(p => p ? G.players.indexOf(p) : -1),

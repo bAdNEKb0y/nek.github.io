@@ -166,6 +166,13 @@ export function createRenderer(canvas) {
     const mv = Math.hypot(x - an.x, y - an.y); an.x = x; an.y = y;
     an.sp += (Math.min(mv / Math.max(1, r * .35), 1) - an.sp) * .25; an.ph += mv / Math.max(1, r * .9);
     const ang = Math.atan2(fy, fx);
+    const flip = pd[5] || 0;
+    if (flip > 0) { // retournée : ombre qui s'étire et cercles de mouvement
+      ctx.save(); ctx.strokeStyle = 'rgba(255,224,138,.8)'; ctx.lineWidth = Math.max(2, r * .25);
+      for (let k = 0; k < 3; k++) { ctx.globalAlpha = flip * (1 - k * .3); ctx.beginPath(); ctx.arc(x, y, r * (1.5 + k * .45 + (.7 - flip)), 0, Math.PI * 2); ctx.stroke(); }
+      ctx.restore();
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(Math.max(.15, Math.cos((.7 - flip) / .7 * Math.PI * 2) * .5 + .5), 1); ctx.rotate(-ang); ctx.translate(-x, -y);
+    }
     ctx.globalAlpha = pd[4] ? .6 : 1;
     ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
     const sw = Math.sin(an.ph) * r * .55 * an.sp;
@@ -197,6 +204,7 @@ export function createRenderer(canvas) {
     if (patt) { ctx.lineWidth = Math.max(2, r * .28); ctx.strokeStyle = '#0b1411'; ctx.lineJoin = 'round'; ctx.strokeText(meta.num, x, y + r * .06); ctx.fillStyle = '#fff'; }
     else ctx.fillStyle = pickText(body);
     ctx.fillText(meta.num, x, y + r * .06);
+    if (flip > 0) ctx.restore();
     ctx.globalAlpha = 1;
     if (ctrl || V.b[3] === i) {
       const nm = meta.name.toUpperCase(), fz = Math.max(9, r * .8);
@@ -292,7 +300,8 @@ export function createRenderer(canvas) {
     ctx.beginPath(); ctx.arc(jx + (I.joyOn ? I.klx : 0), jy + (I.joyOn ? I.kly : 0), g.jr * .45, 0, Math.PI * 2); ctx.fill();
     const me = R.me, c = V.c[me], own = V.b[3], has = own >= 0 && own === c;
     const gkHas = own >= 0 && M.players[own].gk && M.players[own].t === me;
-    drawBtn(g.ax, g.ay, g.ar, has ? 'PASSE' : gkHas ? 'RELANCE' : 'CHANGER', I.aFlash > 0, '#e9f1e6', 0);
+    const held = I.aDown ? Math.min(1, (performance.now() - I.aT) / 320) : 0;
+    drawBtn(g.ax, g.ay, g.ar, held >= 1 ? 'EN L\'AIR' : has ? 'PASSE' : gkHas ? 'RELANCE' : 'CHANGER', I.aFlash > 0 || held >= 1, held >= 1 ? '#ffe08a' : '#e9f1e6', held);
     let inRange = false;
     if (!has && c >= 0 && own >= 0 && M.players[own].t !== me && !M.players[own].gk) {
       const pc = V.p[c]; inRange = Math.hypot(pc[0] - V.b[0], pc[1] - V.b[1]) < 3.8;
@@ -303,7 +312,7 @@ export function createRenderer(canvas) {
   function drawBtn(x, y, r, label, on, col, charge) {
     ctx.fillStyle = on ? col : 'rgba(6,12,10,.35)'; ctx.strokeStyle = col; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    if (charge > 0) { ctx.strokeStyle = charge > .85 ? '#f0776b' : '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + charge * Math.PI * 2); ctx.stroke(); }
+    if (charge > 0) { ctx.strokeStyle = label === 'EN L\'AIR' ? '#ffe08a' : charge > .85 ? '#f0776b' : '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + charge * Math.PI * 2); ctx.stroke(); }
     ctx.fillStyle = on ? '#0b1411' : col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `800 ${Math.min(r * .5, label.length > 6 ? r * .4 : 24)}px ${FD}`; ctx.fillText(label, x, y + 1);
   }
@@ -354,6 +363,11 @@ export function createRenderer(canvas) {
       ctx.fillStyle = CHALK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${Math.min(42, R.W * .05)}px ${FD}`;
       ctx.fillText(ui.overlay, R.W / 2, R.H / 2);
     }
+  };
+  R.burstAt = (V, M) => {
+    const x = sx(V.b[0], V.b[1]), y = sy(V.b[0], V.b[1]), out = [];
+    for (let i = 0; i < 36; i++) out.push({ x, y, vx: (Math.random() * 2 - 1) * 260, vy: (Math.random() * 2 - 1) * 200 - 60, c: i % 3 ? '#ffe08a' : '#ffffff', life: .6 + Math.random() * .6, r: 1.5 + Math.random() * 2, rot: Math.random() * 6 });
+    return out;
   };
   R.goalBurst = (team, M) => {
     const left = (team === R.me) ? false : true; // on marque à droite
