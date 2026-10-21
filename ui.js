@@ -18,19 +18,26 @@ export function shirtSVG(k) {
   return `<svg viewBox="0 0 52 54" aria-hidden="true"><defs><clipPath id="${id}"><path d="${path}"/></clipPath></defs><path d="${path}" fill="${k.c1}"/><g clip-path="url(#${id})">${pat}</g><path d="${path}" fill="none" stroke="${trim}" stroke-width="2.2" stroke-linejoin="round"/><path d="M22 4 Q26 9 30 4" fill="none" stroke="${k.p === 'solid' ? k.c2 : '#fff'}" stroke-width="2.4"/></svg>`;
 }
 
-/* Portrait illustré (pas de photo) : visage, coiffure, barbe et maillot uniques et stables pour chaque joueur, teinté à la couleur de la carte */
+/* Portrait illustré (pas de photo) : teint, cheveux, coiffure et barbe propres à chaque joueur, maillot du club */
 function hash(str) { let h = 2166136261; for (const ch of str) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 let faceN = 0;
+/* Apparence de chaque joueur : teint (1 clair → 6 foncé), cheveux (k noir, b brun, l châtain, o blond, r roux, n aucun), coiffure, barbe */
+const LOOK = {'PSG-0':'1b03','PSG-1':'2k01','PSG-2':'3k03','PSG-3':'6k43','PSG-4':'1b33','OM-0':'1b01','OM-1':'2k13','OM-2':'3k41','OM-3':'4k20','OM-4':'5k42','OL-0':'1b00','OL-1':'6k41','OL-2':'1b11','OL-3':'5k23','OL-4':'6k40','ASM-0':'1l00','ASM-1':'2k01','ASM-2':'4k40','ASM-3':'1l03','ASM-4':'3k20','LOSC-0':'2k03','LOSC-1':'3k41','LOSC-2':'1b01','LOSC-3':'1o00','LOSC-4':'1b11','RCL-0':'1l00','RCL-1':'1b01','RCL-2':'1k03','RCL-3':'1b13','RCL-4':'5k20','RMA-0':'1b10','RMA-1':'6k41','RMA-2':'1b10','RMA-3':'5k40','RMA-4':'5k80','BAR-0':'1b00','BAR-1':'1b00','BAR-2':'5k20','BAR-3':'4k20','BAR-4':'1b00','ATM-0':'1b13','ATM-1':'1k01','ATM-2':'1b01','ATM-3':'1l73','ATM-4':'1b00','MCI-0':'2k03','MCI-1':'2k11','MCI-2':'1b03','MCI-3':'1o70','MCI-4':'1b00','MUN-0':'1b00','MUN-1':'1o00','MUN-2':'1b03','MUN-3':'2k13','MUN-4':'6k40','LIV-0':'1b11','LIV-1':'4k41','LIV-2':'6k41','LIV-3':'3kA1','LIV-4':'5k23','ARS-0':'1b01','ARS-1':'5k40','ARS-2':'4k01','ARS-3':'6k40','ARS-4':'1b11','CHE-0':'2k03','CHE-1':'4k20','CHE-2':'6k41','CHE-3':'1r00','CHE-4':'5k40','BAY-0':'1o00','BAY-1':'6k40','BAY-2':'2k10','BAY-3':'1l03','BAY-4':'6k20','BVB-0':'1b01','BVB-1':'1o01','BVB-2':'1b01','BVB-3':'6k41','BVB-4':'5k80','JUV-0':'1b01','JUV-1':'4k41','JUV-2':'5k40','JUV-3':'2k10','JUV-4':'1b31','INT-0':'1b00','INT-1':'1b13','INT-2':'1n93','INT-3':'2k01','INT-4':'5k40','MIL-0':'6k41','MIL-1':'5k40','MIL-2':'1b03','MIL-3':'1b00','MIL-4':'5k80','STAR-0':'2k53','STAR-1':'3k41','STAR-2':'1r10','STAR-3':'1l30','STAR-4':'2k10','STAR-5':'6o40','STAR-6':'5k40','STAR-7':'1b01','STAR-8':'5k40','STAR-9':'1k00','STAR-10':'3k50','STAR-11':'1k00','STAR-12':'1b10','STAR-13':'2b20','STAR-14':'2b20','STAR-15':'5k20','STAR-16':'5k80','STAR-17':'1b10','STAR-18':'1l20','STAR-19':'4k20','STAR-20':'1b10','STAR-21':'1b13','STAR-22':'1b00','STAR-23':'1b10','STAR-24':'2k10','STAR-25':'4k40','STAR-26':'1k03','STAR-27':'2k01','STAR-28':'6k20','LEG-0':'6k40','LEG-1':'2k20','LEG-2':'2b40','LEG-3':'3k40','LEG-4':'1b30','LEG-5':'5n90','LEG-6':'4k30','LEG-7':'1b20','LEG-8':'1b00','LEG-9':'1b00','LEG-10':'1b30','LEG-11':'1l10','LEG-12':'1k00','LEG-13':'1bA0','LEG-14':'6k40','LEG-15':'1k10','LEG-16':'1b30','LEG-17':'1n90','ULT-0':'1b01','ULT-1':'2k50'};
+const SKIN = ['#f1c9a5', '#f1c9a5', '#dcaa80', '#c68e62', '#a8714a', '#8a5634', '#5f3a22'];
+const HAIR = { k: '#1b1714', b: '#3a2718', l: '#7a5532', o: '#d6b05a', r: '#b5652d', g: '#9a9a9a', n: '#1b1714' };
 export function faceSVG(c) {
   const h = hash(c.id + c.name), R = n => (h >>> n);
   const k = Array.isArray(c.kit) ? { c1: c.kit[0], c2: c.kit[1], p: c.kit[2] } : c.kit;
   const id = 'fc' + (faceN++);
-  const shape = R(3) % 3, style = R(6) % 9, beard = R(11) % 5, brow = R(15) % 3, mouth = R(18) % 3, eye = R(21) % 2;
+  const L = LOOK[c.id] || `${1 + R(1) % 6}k${R(6) % 9}${R(11) % 4}`;
+  const skin = SKIN[+L[0]] || SKIN[2], hairC = HAIR[L[1]] || HAIR.k, style = parseInt(L[2], 16), beard = +L[3];
+  const dark = +L[0] >= 5;
+  const shape = R(3) % 3, brow = R(15) % 3, mouth = R(18) % 3, eye = R(21) % 2;
   // Visage (3 morphologies) — coordonnées dans une boîte 100 x 112
   const jaw = ['M30 44 C30 24 40 16 50 16 C60 16 70 24 70 44 C70 60 64 72 50 76 C36 72 30 60 30 44 Z',
     'M29 44 C29 23 39 15 50 15 C61 15 71 23 71 44 C71 58 67 70 58 75 L42 75 C33 70 29 58 29 44 Z',
     'M31 43 C31 24 40 17 50 17 C60 17 69 24 69 43 C69 61 62 74 50 77 C38 74 31 61 31 43 Z'][shape];
-  const ink = 'rgba(0,0,0,.55)', soft = 'rgba(0,0,0,.18)';
+  const ink = dark ? '#120a05' : 'rgba(40,20,10,.8)', soft = dark ? 'rgba(0,0,0,.35)' : 'rgba(90,45,20,.28)';
   let pat = '';
   if (k.p === 'stripes') for (let x = 6; x < 100; x += 14) pat += `<rect x="${x}" y="78" width="7" height="34" fill="${k.c2}"/>`;
   if (k.p === 'band') pat = `<rect x="40" y="78" width="20" height="34" fill="${k.c2}"/>`;
@@ -47,7 +54,7 @@ export function faceSVG(c) {
     // mi-long
     `<path d="M27 52 C22 20 36 9 50 9 C64 9 78 20 73 52 L70 60 C70 40 66 26 50 25 C34 26 30 40 30 60 Z"/>`,
     // crâne rasé (ombre)
-    `<path d="M31 36 C31 21 40 14 50 14 C60 14 69 21 69 36 C64 27 58 24 50 24 C42 24 36 27 31 36 Z" opacity=".45"/>`,
+    `<path d="M31 36 C31 21 40 14 50 14 C60 14 69 21 69 36 C64 27 58 24 50 24 C42 24 36 27 31 36 Z" opacity=".75"/>`,
     // houppe
     `<path d="M30 40 C29 20 38 12 50 12 C62 12 71 20 70 40 C66 28 58 24 48 25 C40 26 34 31 30 40 Z"/><path d="M42 14 C46 4 60 2 66 10 C60 8 54 10 50 16 Z"/>`,
     // pointes
@@ -56,6 +63,10 @@ export function faceSVG(c) {
     `<path d="M30 40 C29 21 38 13 50 13 C62 13 71 21 70 40 C67 28 60 24 50 24 C40 24 33 28 30 40 Z"/><circle cx="50" cy="8" r="6"/>`,
     // tresses
     `<path d="M30 40 C29 20 38 12 50 12 C62 12 71 20 70 40 C67 28 60 24 50 24 C40 24 33 28 30 40 Z"/><path d="M38 16 L36 36 M46 13 L45 30 M54 13 L55 30 M62 16 L64 36" stroke="${soft}" stroke-width="1.6"/>`,
+    // chauve (9)
+    ``,
+    // afro / grosses boucles (10)
+    `<g><circle cx="50" cy="16" r="15"/><circle cx="34" cy="22" r="11"/><circle cx="66" cy="22" r="11"/><circle cx="29" cy="36" r="7"/><circle cx="71" cy="36" r="7"/></g>`,
   ];
   const beards = ['',
     `<path d="M33 54 C35 68 42 75 50 75 C58 75 65 68 67 54 C63 64 57 67 50 67 C43 67 37 64 33 54 Z"/>`,
@@ -71,18 +82,18 @@ export function faceSVG(c) {
     <linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient></defs>
     <path d="${torso}" fill="${k.c1}"/><g clip-path="url(#${id}t)">${pat}<path d="M0 78 H100 V112 H0 Z" fill="url(#${id}g)"/></g>
     <path d="${torso}" fill="none" stroke="rgba(0,0,0,.3)" stroke-width="1.5"/>
-    <path d="M40 72 L42 84 C46 88 54 88 58 84 L60 72 Z" fill="currentColor" opacity=".78"/><path d="M41 74 C46 79 54 79 59 74 L59 78 C54 82 46 82 41 78 Z" fill="${soft}"/>
+    <path d="M40 72 L42 84 C46 88 54 88 58 84 L60 72 Z" fill="${skin}"/><path d="M41 74 C46 79 54 79 59 74 L59 78 C54 82 46 82 41 78 Z" fill="${soft}"/>
     <path d="M38 81 L50 92 L62 81" fill="none" stroke="${k.p === 'solid' ? k.c2 : '#fff'}" stroke-width="3" stroke-linejoin="round"/>
-    <g fill="currentColor" opacity=".9"><ellipse cx="29.5" cy="47" rx="4" ry="6.5"/><ellipse cx="70.5" cy="47" rx="4" ry="6.5"/></g>
+    <g fill="${skin}"><ellipse cx="29.5" cy="47" rx="4" ry="6.5"/><ellipse cx="70.5" cy="47" rx="4" ry="6.5"/></g>
     <path d="M28.5 44 C30 46 30 49 29 51 M71.5 44 C70 46 70 49 71 51" fill="none" stroke="${soft}" stroke-width="1.2"/>
-    <path d="${jaw}" fill="currentColor"/>
+    <path d="${jaw}" fill="${skin}"/>
     <g clip-path="url(#${id}f)"><path d="M50 10 C64 14 74 30 72 50 C70 66 62 76 50 80 L80 80 L80 10 Z" fill="rgba(0,0,0,.14)"/><ellipse cx="40" cy="34" rx="9" ry="6" fill="#fff" opacity=".18"/></g>
     <g fill="none" stroke="${ink}" stroke-width="2.6" stroke-linecap="round">${brows.map(d => `<path d="${d}"/>`).join('')}</g>
     ${eyes}<circle cx="42.6" cy="44.4" r=".8" fill="#fff" opacity=".8"/><circle cx="59.6" cy="44.4" r=".8" fill="#fff" opacity=".8"/>
     <path d="M50 46 L48 55 C49 56.5 52 56.5 53 55.5" fill="none" stroke="${soft}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="${mouths}" fill="none" stroke="${ink}" stroke-width="2" stroke-linecap="round"/>
-    <g fill="${ink}" opacity=".85">${beards[beard]}</g>
-    <g fill="#1d1d1f" opacity=".82">${hairs[style]}</g>
+    <g fill="${hairC}" opacity="${beard === 3 ? .7 : .95}">${beards[beard]}</g>
+    <g fill="${hairC}">${hairs[style] ?? ''}</g>${L[1] !== 'n' && style !== 9 && style !== 4 ? `<path d="M40 16 C46 13 54 13 58 15" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="2.5" stroke-linecap="round"/>` : ''}
   </svg>`;
 }
 
