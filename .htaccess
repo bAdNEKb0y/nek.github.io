@@ -1,0 +1,17 @@
+# Foot de Poche Online — o2switch / Apache
+AddType application/manifest+json .webmanifest
+AddType text/javascript .js
+AddDefaultCharset utf-8
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  <FilesMatch "\.(html|js|css)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
+# Forcer le HTTPS (nécessaire pour le plein écran et la connexion directe)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>

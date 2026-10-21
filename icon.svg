@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#2a8f55"/><stop offset=".55" stop-color="#155a34"/><stop offset="1" stop-color="#08140e"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff1b0"/><stop offset=".35" stop-color="#ffcf4d"/><stop offset=".7" stop-color="#d79a26"/><stop offset="1" stop-color="#8f5e12"/>
+    </linearGradient>
+    <linearGradient id="inner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#123f27"/><stop offset="1" stop-color="#071a10"/>
+    </linearGradient>
+    <radialGradient id="ballg" cx="38%" cy="32%" r="70%">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".75" stop-color="#e9ecef"/><stop offset="1" stop-color="#aeb6bd"/>
+    </radialGradient>
+    <clipPath id="ballclip"><circle cx="256" cy="262" r="92"/></clipPath>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity=".45"/></filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <!-- bandes de pelouse -->
+  <g opacity=".10" fill="#ffffff">
+    <rect x="0" y="0" width="64" height="512"/><rect x="128" y="0" width="64" height="512"/><rect x="256" y="0" width="64" height="512"/><rect x="384" y="0" width="64" height="512"/>
+  </g>
+  <!-- rond central -->
+  <circle cx="256" cy="262" r="196" fill="none" stroke="#eef3ea" stroke-opacity=".14" stroke-width="10"/>
+  <!-- écusson -->
+  <g filter="url(#sh)">
+    <path d="M256 54 L404 104 C404 250 360 360 256 452 C152 360 108 250 108 104 Z" fill="url(#gold)"/>
+    <path d="M256 78 L384 121 C382 249 343 345 256 425 C169 345 130 249 128 121 Z" fill="url(#inner)"/>
+  </g>
+  <!-- étoiles -->
+  <g fill="url(#gold)">
+    <path transform="translate(216 128) scale(.9)" d="M0 -16 L4.7 -5 L16 -5 L7 2 L10 14 L0 7 L-10 14 L-7 2 L-16 -5 L-4.7 -5 Z"/>
+    <path transform="translate(256 118)" d="M0 -16 L4.7 -5 L16 -5 L7 2 L10 14 L0 7 L-10 14 L-7 2 L-16 -5 L-4.7 -5 Z"/>
+    <path transform="translate(296 128) scale(.9)" d="M0 -16 L4.7 -5 L16 -5 L7 2 L10 14 L0 7 L-10 14 L-7 2 L-16 -5 L-4.7 -5 Z"/>
+  </g>
+  <!-- ballon -->
+  <g>
+    <circle cx="256" cy="262" r="92" fill="url(#ballg)"/>
+    <g clip-path="url(#ballclip)" fill="#14201a">
+      <path d="M256 222 L294 250 L280 295 L232 295 L218 250 Z"/>
+      <path d="M256 160 L282 170 L284 196 L256 206 L228 196 L230 170 Z"/>
+      <path d="M332 214 L356 236 L350 270 L326 268 L312 240 Z"/>
+      <path d="M180 214 L200 240 L186 268 L162 270 L156 236 Z"/>
+      <path d="M220 330 L246 318 L268 334 L262 362 L226 362 Z" transform="translate(-30 -6)"/>
+      <path d="M266 330 L292 318 L314 334 L308 362 L272 362 Z" transform="translate(16 -6)"/>
+    </g>
+    <g stroke="#14201a" stroke-width="5" stroke-linecap="round" clip-path="url(#ballclip)" fill="none">
+      <path d="M256 222 L256 206"/><path d="M294 250 L312 240"/><path d="M218 250 L200 240"/><path d="M280 295 L286 314"/><path d="M232 295 L226 314"/>
+      <path d="M282 170 L312 190 L312 240"/><path d="M230 170 L200 190 L200 240"/><path d="M226 314 L250 340 L286 314"/>
+    </g>
+    <circle cx="256" cy="262" r="92" fill="none" stroke="#0b1411" stroke-opacity=".35" stroke-width="4"/>
+    <ellipse cx="226" cy="222" rx="30" ry="16" fill="#fff" opacity=".55" transform="rotate(-30 226 222)"/>
+  </g>
+  <!-- bandeau -->
+  <path d="M150 376 L362 376 L348 412 L164 412 Z" fill="url(#gold)"/>
+  <text x="256" y="404" text-anchor="middle" font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif" font-weight="900" font-size="34" letter-spacing="4" fill="#0b1411">FOOT</text>
+</svg>

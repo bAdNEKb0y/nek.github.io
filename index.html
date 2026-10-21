@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b1411">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Foot de Poche Online</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Foot de Poche">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Extra+Condensed:wght@600;800&family=Barlow:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Connexion -->
+  <section id="auth" class="screen" hidden>
+    <div class="split">
+      <div class="brand">
+        <div class="kicker">Foot 2D · 5 contre 5 · en ligne</div>
+        <h1>FOOT<br><span>DE POCHE</span></h1>
+        <p class="lede">Joue contre ton pote en direct, chacun sur son téléphone. Choisis ton club, monte au classement.</p>
+      </div>
+      <form class="card authcard" id="authForm" novalidate>
+        <div class="seg" role="tablist">
+          <button type="button" role="tab" data-mode="login" aria-selected="true">Connexion</button>
+          <button type="button" role="tab" data-mode="signup" aria-selected="false">Créer un compte</button>
+        </div>
+        <label for="uName">Pseudo</label>
+        <input id="uName" autocomplete="username" maxlength="16" spellcheck="false" autocapitalize="off" placeholder="3 à 16 lettres, chiffres ou _">
+        <label for="uPass">Mot de passe</label>
+        <input id="uPass" type="password" autocomplete="current-password" maxlength="72" placeholder="6 caractères minimum">
+        <p class="err" id="authErr" role="alert"></p>
+        <button class="btn primary" id="authGo" type="submit">Se connecter</button>
+        <p class="hint" id="authHint">Ton compte reste connecté sur ce téléphone.</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- Accueil -->
+  <section id="home" class="screen" hidden>
+    <header class="topbar">
+      <div class="logo">FOOT <span>DE POCHE</span></div>
+      <div class="hdr-right"><span class="coins" id="coinsHome" title="Pièces"></span><div class="me" id="meCard"></div></div>
+    </header>
+    <div class="homegrid">
+      <div class="col">
+        <button class="play-tile" id="bQuick"><small>En ligne</small><b>Partie rapide</b><span id="quickTxt">Trouve un adversaire au hasard</span></button>
+        <div class="row2">
+          <button class="tile" id="bCreate"><b>Créer une salle</b><span>Donne le code à ton pote</span></button>
+          <form class="tile join" id="joinForm"><b>Rejoindre</b><div class="joinrow"><input id="joinCode" maxlength="4" placeholder="CODE" autocapitalize="characters" spellcheck="false" aria-label="Code de la salle"><button class="btn small" type="submit">OK</button></div></form>
+        </div>
+        <div class="row2">
+          <button class="tile club" id="bClub"><b>Mon équipe</b><span id="clubTxt">Crée ton équipe avec tes cartes</span></button>
+          <button class="tile packs" id="bShop"><b>Packs</b><span id="shopTxt">Ouvre des packs, trouve des légendes</span></button>
+        </div>
+        <p class="hint">Duel de packs 1 contre 1 : crée une salle, puis choisis le mode « Duel de packs ».</p>
+        <button class="tile wide" id="bSolo"><b>Entraînement contre l'ordi</b><span>Pour t'échauffer seul</span></button>
+        <p class="err" id="homeErr" role="alert"></p>
+      </div>
+      <div class="col">
+        <div class="card">
+          <div class="cardhead"><h2>Classement</h2><button class="link" id="bRefresh">Actualiser</button></div>
+          <ol class="board" id="board"><li class="muted">Chargement…</li></ol>
+        </div>
+        <div class="card">
+          <h2>Mes derniers matchs</h2>
+          <ul class="recent" id="recent"><li class="muted">Chargement…</li></ul>
+        </div>
+        <button class="link out" id="bLogout">Se déconnecter</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mon équipe -->
+  <section id="club" class="screen" hidden>
+    <header class="topbar">
+      <button class="link" data-home>← Accueil</button>
+      <div class="logo">MON <span>ÉQUIPE</span></div>
+      <span class="coins" id="coinsClub"></span>
+    </header>
+    <div class="clubgrid">
+      <div class="col">
+        <div class="card">
+          <label class="lbl" for="tName">Nom de l'équipe</label>
+          <input class="field" id="tName" maxlength="22" autocomplete="off">
+          <span class="lbl">Maillot</span>
+          <div class="kits" id="kitList"></div>
+        </div>
+        <div class="tsum" id="tSum"></div>
+        <p class="err" id="clubErr" role="alert"></p>
+        <button class="btn primary" id="bSaveTeam">Enregistrer l'équipe</button>
+        <p class="hint">Touche un poste pour choisir un joueur de ta collection. Un poste vide est tenu par un remplaçant noté 64.</p>
+      </div>
+      <div class="col">
+        <div class="pitch" id="pitch"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Packs -->
+  <section id="shop" class="screen" hidden>
+    <header class="topbar">
+      <button class="link" data-home>← Accueil</button>
+      <div class="logo">PACK <span>OPENING</span></div>
+      <span class="coins" id="coinsShop"></span>
+    </header>
+    <div class="wrap1200">
+      <div class="prog" id="prog"></div>
+      <nav class="tabs" id="shopTabs"><button data-tab="packs" aria-selected="true">Packs</button><button data-tab="coll" aria-selected="false">Collection</button></nav>
+      <div id="shopBody"></div>
+    </div>
+  </section>
+
+  <!-- Salle -->
+  <section id="lobby" class="screen" hidden>
+    <header class="topbar">
+      <button class="link" id="bLeave">← Quitter la salle</button>
+      <div class="code" id="roomCode"></div>
+      <div class="netpill" id="netPill">Connexion…</div>
+    </header>
+    <div class="lobbygrid">
+      <div class="col">
+        <div class="vs">
+          <div class="slot" id="slotMe"></div>
+          <div class="vsx">VS</div>
+          <div class="slot" id="slotOp"></div>
+        </div>
+        <div class="card opts" id="hostOpts">
+          <span>Mode</span><div class="chips" id="modeChips"></div>
+          <span id="durLbl">Durée</span><div class="chips" id="durChips"></div>
+          <span id="dpLbl" hidden>Pack</span><div class="chips" id="dpChips" hidden></div>
+          <span id="drLbl" hidden>Manches</span><div class="chips" id="drChips" hidden></div>
+        </div>
+        <button class="btn primary big" id="bReady">Je suis prêt</button>
+        <p class="hint" id="lobbyHint"></p>
+      </div>
+      <div class="col">
+        <div class="card"><h2>Choisis ton équipe</h2><div class="teams" id="teamGrid"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Duel de packs -->
+  <section id="pduel" class="screen" hidden>
+    <div class="wrap1200">
+      <div class="dboard" id="dBoard"></div>
+      <div class="dround" id="dRound"></div>
+      <div class="actions" id="dActions"></div>
+      <div class="hist" id="dHist"></div>
+    </div>
+  </section>
+
+  <!-- Match -->
+  <section id="game" class="screen game" hidden>
+    <canvas id="cv" aria-label="Terrain de football"></canvas>
+    <div class="rotate" id="rotate"><div class="phone"></div><b>Tourne ton téléphone</b><span>Le match se joue en paysage</span></div>
+    <div class="overlay" id="menu" hidden>
+      <div class="box"><h2>Menu</h2>
+        <button class="btn primary" id="bResume">Reprendre</button>
+        <button class="btn" id="bFull">Plein écran</button>
+        <button class="btn danger" id="bQuit">Abandonner le match</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Fin -->
+  <section id="end" class="screen" hidden>
+    <div class="endgrid">
+      <div class="col">
+        <div id="endBoard"></div>
+        <div id="endRating"></div>
+        <div class="actions" id="endActions"></div>
+      </div>
+      <div class="col">
+        <div id="endMvp"></div>
+        <div class="card stats" id="endStats"></div>
+        <div class="lineups" id="endLineups"></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="pack" class="overlay pk" hidden></div>
+  <div id="picker" class="overlay sheet" hidden></div>
+  <div class="toast" id="toast" role="status"></div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
