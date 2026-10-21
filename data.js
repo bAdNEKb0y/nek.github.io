@@ -79,7 +79,7 @@ const STARS=[
   ['Rice',41,'MIL',88,'ARS'],['Ødegaard',8,'MIL',87,'ARS'],['Enzo Fernández',8,'MIL',86,'CHE'],['Caicedo',25,'MIL',87,'CHE'],['Barella',23,'MIL',87,'INT'],['Çalhanoğlu',20,'MIL',86,'INT'],
   ['Nico Williams',10,'ATT',86,'ATH'],
 ];
-const ULTIMES=[['Messi',10,'ATT',98,'MIA'],['C. Ronaldo',7,'ATT',97,'NAS']];
+const ULTIMES=[['Messi',10,'ATT',98,'MIA'],['C. Ronaldo',7,'ATT',99,'NAS']];
 const clubInfo=k=>{const t=TEAMS.find(x=>x.short===k);return t?{n:t.short,k:t.h}:{n:XCLUB[k].n,k:XCLUB[k].k}};
 export const tierOf=c=>c.goat?'goat':c.leg?'leg':c.r>=89?'elite':c.r>=85?'rare':'or';
 export const TIER_NAME={or:'Or',rare:'Rare',elite:'Élite',leg:'Légende',goat:'Ultime'};
