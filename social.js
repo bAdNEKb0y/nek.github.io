@@ -10,10 +10,12 @@ export const TITLES = ['Buteur né', 'Le Mur', 'Roi du dribble', 'Maître des pa
 const ONLINE = new Map(); // uid -> {name, busy}
 let FRIENDS = [], UNREAD = {}, CHAT = null, TRADES = [];
 /** Messages rapides (pas de texte libre : pas d'insultes ni d'inconnus qui écrivent n'importe quoi) */
-export const MSGS = ['Salut ! 👋', 'On joue ? ⚽', 'GG ! 👏', 'Revanche ? 😤', 'Bien joué !', 'Trop fort 🔥', 'J\'arrive !', 'Pas maintenant, plus tard',
-  'T\'as eu quoi dans tes packs ?', 'J\'ai eu une légende !! 🤩', 'Merci !', 'Bonne nuit 😴', '😂', '👍', '⚽🔥', 'Viens dans ma salle !',
-  'Quel but ! 😱', 'Tu veux échanger des cartes ?', 'Regarde mon replay 🎬', 'Encore une ?', 'J\'ai trop la rage 😭', 'Tu es trop fort 💪', 'À tout à l\'heure !', 'Ok !',
-  '❤️', '😎', '🏆', '🤝'];
+// index 28-31 réservés (31 = replay)
+export const MSGS = ["Salut ! 👋", "On joue ? ⚽", "GG ! 👏", "Revanche ? 😤", "Bien joué !", "Trop fort 🔥", "J'arrive !", "Pas maintenant, plus tard", "T'as eu quoi dans tes packs ?", "J'ai eu une légende !! 🤩", "Merci !", "Bonne nuit 😴", "😂", "👍", "⚽🔥", "Viens dans ma salle !", "Quel but ! 😱", "Tu veux échanger des cartes ?", "Regarde mon replay 🎬", "Encore une ?", "J'ai trop la rage 😭", "Tu es trop fort 💪", "À tout à l'heure !", "Ok !", "❤️", "😎", "🏆", "🤝", null, null, null, null, "Prêt ?", "Je crée une salle", "C'est quoi le code ?", "Je suis dans la salle !", "On fait un 2 contre 2 ? 👥", "On joue tous ensemble contre l'ordi ?", "Un dernier match ?", "3 minutes ou 5 ?", "Je prends le PSG 😏", "Duel de packs ? 📦", "Ma connexion bug 😩", "J'ai trop lag 🐌", "Belle passe !", "Quelle retournée ! 🤯", "Arrête de tacler 😂", "Ton gardien dort 🧤😂", "Je t'ai eu !", "Match nul, revanche ?", "J'ai eu une Ultime !!! 🐐", "Il me manque quelques cartes", "T'as qui comme légende ?", "Regarde mon équipe 💪", "Échange équitable ?", "J'accepte ton échange ✅", "Non merci pour l'échange", "Pack gratuit dispo ! 🎁", "J'ai eu un pack bonus 🎁", "J'ai récupéré mon cadeau du jour", "Ça va ?", "Oui et toi ?", "Trop bien !", "Désolé 🙏", "Pas grave", "Attends 2 minutes", "Je dois y aller", "Demain ?", "Bravo ! 🎉", "Bien vu 👀", "Oui", "Non", "Peut-être 🤔", "Bon match ! 🤝", "🔥", "😭", "🤣", "😡", "🥶", "🐐", "👑", "💯", "🙏", "🎉", "🤯", "👀"];
+export const MSG_CATS = [{"id": "salut", "n": "Salut", "m": [0, 10, 11, 22, 23, 24, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73]}, {"id": "match", "n": "Match", "m": [1, 2, 3, 4, 5, 6, 7, 15, 16, 19, 20, 21, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]}, {"id": "cartes", "n": "Cartes", "m": [8, 9, 17, 18, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59]}, {"id": "emo", "n": "Émojis", "m": [12, 13, 14, 25, 26, 27, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85]}];
+const QK = 'fdp-qtab', QR = 'fdp-qrecent';
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } };
 
 const kitOf = p => {
   if (p.avatar) { const k = KITS.find(x => x.id === p.avatar); if (k) return k.k; }
@@ -248,16 +250,33 @@ function renderChat(loading) {
       const body = m.msg === 31 ? (m.replay ? `<button class="rpmsg" data-rp="${m.replay}">🎬 <b>Replay</b><small>${esc(m.replay_title || 'Match')}</small><em>▶ Voir</em></button>` : '<span class="muted">🎬 Replay supprimé</span>') : `<span>${esc(MSGS[m.msg] ?? '…')}</span>`;
       return `${sep}<div class="bub ${m.mine ? 'me' : ''} ${m.msg === 31 ? 'rp' : ''}">${body}<time>${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${lastMine && m.read ? ' · Vu ✓✓' : ''}</time></div>`;
     }).join('') : '<p class="muted">Pas encore de message. Dis-lui bonjour !</p>'}</div>
-    <div class="qmsgs">${MSGS.map((t, i) => `<button class="chip" data-m="${i}">${esc(t)}</button>`).join('')}<button class="chip rpchip" data-x="rpsend">🎬 Envoyer un replay</button></div>
+    <div class="qwrap">${quickHTML()}</div>
     <p class="hint">Messages rapides seulement, pour que ça reste sympa entre joueurs.${canNotif ? ' <button class="link" data-x="notif">Activer les notifications</button>' : ''}</p></div>`;
   const box = el.querySelector('#msgs'); box.scrollTop = box.scrollHeight;
   el.querySelector('[data-x=close]').onclick = closeChat;
   el.querySelector('[data-x=prof]').onclick = () => { const id = f.id; closeChat(); openProfile(id); };
   const c = el.querySelector('[data-x=chal]'); if (c) c.onclick = () => { closeChat(); challenge(f); };
   const n = el.querySelector('[data-x=notif]'); if (n) n.onclick = async () => { const r = await enablePush(); H.toast(r === 'on' ? '🔔 Notifications activées !' : r === 'ios-home' ? 'Sur iPhone : Partager ⬆️ → « Sur l\'écran d\'accueil », puis ouvre le jeu depuis l\'icône.' : 'Notifications non activées.'); renderChat(); };
-  el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => sendMsg(f.id, +b.dataset.m));
   el.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => playReplay(b.dataset.rp));
-  el.querySelector('[data-x=rpsend]').onclick = () => pickReplay(f);
+  bindQuick(f);
+}
+/* Messages rapides rangés par onglets (Récents, Salut, Match, Cartes, Émojis) */
+function quickHTML() {
+  const rec = lsGet(QR, []).filter(i => MSGS[i]);
+  const tabs = [...(rec.length ? [{ id: 'rec', n: '⭐ Récents', m: rec }] : []), ...MSG_CATS];
+  let cur = lsGet(QK, rec.length ? 'rec' : 'salut'); if (!tabs.some(t => t.id === cur)) cur = tabs[0].id;
+  const tab = tabs.find(t => t.id === cur);
+  return `<div class="qtabs" role="tablist">${tabs.map(t => `<button role="tab" class="qtab" data-qt="${t.id}" aria-selected="${t.id === cur}">${esc(t.n)}</button>`).join('')}</div>
+    <div class="qmsgs">${tab.m.map(i => `<button class="chip" data-m="${i}">${esc(MSGS[i])}</button>`).join('')}<button class="chip rpchip" data-x="rpsend">🎬 Envoyer un replay</button></div>`;
+}
+function bindQuick(f) {
+  const w = $('#chat .qwrap'); if (!w) return;
+  w.querySelectorAll('[data-qt]').forEach(b => b.onclick = () => { lsSet(QK, b.dataset.qt); w.innerHTML = quickHTML(); bindQuick(f); });
+  w.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+    const m = +b.dataset.m; lsSet(QR, [m, ...lsGet(QR, []).filter(x => x !== m)].slice(0, 10));
+    sendMsg(f.id, m);
+  });
+  w.querySelector('[data-x=rpsend]').onclick = () => pickReplay(f);
 }
 async function pickReplay(f) {
   const list = await listReplays(ME.id);
