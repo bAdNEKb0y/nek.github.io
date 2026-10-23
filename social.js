@@ -4,7 +4,8 @@ import { TEAMS, KITS, CARDS, CARD_LIST, TRANK, TIER_NAME } from './data.js';
 import { $, esc, shirtSVG, cardHTML } from './ui.js';
 import { openReplay, encode } from './replay.js';
 import { sendPush, enablePush } from './push.js';
-import { sentence } from './chatdata.js'; // anciennes phrases construites (affichage seulement)
+import { sentence } from './chatdata.js';
+import { SET } from './settings.js'; // anciennes phrases construites (affichage seulement)
 
 let H = null, ME = null, CH = null;
 export const TITLES = ['Buteur né', 'Le Mur', 'Roi du dribble', 'Maître des packs', 'Chasseur de légendes', 'Capitaine', 'Pro de la retournée', 'Tacleur fou', 'Passeur de génie', 'Futur Ballon d\'Or', 'Supporter n°1', 'Débutant motivé'];
@@ -232,7 +233,7 @@ async function saveProfile(ch) {
 function friendOf(id) { return FRIENDS.find(f => f.id === id); }
 export async function openChat(id) {
   const f = friendOf(id); if (!f) return;
-  CHAT = { id, list: [] };
+  CHAT = { id, list: [], quick: !!SET.quickOpen };
   const el = $('#chat'); el.hidden = false; renderChat(true);
   const { data } = await sb.rpc('my_msgs', { p_with: id });
   if (!CHAT || CHAT.id !== id) return;
@@ -242,7 +243,7 @@ export function closeChat() { if (REC) stopRec(false); if (PLAY) { PLAY.a.pause(
 function renderChat(loading) {
   const el = $('#chat'), f = friendOf(CHAT.id), on = isOnline(f.id);
   const canNotif = 'Notification' in window && Notification.permission === 'default';
-  el.innerHTML = `<div class="box setbox chatbox"><div class="cardhead"><button class="fmain" data-x="prof"><span class="fav">${shirtSVG(kitOf(f))}<i class="dot ${on ? 'on' : ''}"></i></span><span class="fnm"><b>${esc(f.display)}</b><small>${on ? 'En ligne' : 'Hors ligne · il verra ton message plus tard'}</small></span></button>
+  el.innerHTML = `<div class="box setbox chatbox"><div class="cardhead"><button class="fmain" data-x="prof"><span class="fav">${shirtSVG(kitOf(f))}<i class="dot ${on ? 'on' : ''}"></i></span><span class="fnm"><b>${esc(f.display)}</b><small>${on ? 'En ligne' : 'Hors ligne'}</small></span></button>
       <button class="btn small chal" data-x="chal">Défier</button><button class="link" data-x="close">Fermer</button></div>
     <div class="msgs" id="msgs">${loading ? '<p class="muted">Chargement…</p>' : CHAT.list.length ? CHAT.list.map((m, i, a) => {
       const day = new Date(m.created_at).toDateString(), prev = i ? new Date(a[i - 1].created_at).toDateString() : '';
@@ -253,8 +254,8 @@ function renderChat(loading) {
     }).join('') : '<p class="muted">Pas encore de message. Dis-lui bonjour !</p>'}</div>
     ${CHAT.quick ? `<div class="qwrap">${quickHTML()}</div>` : ''}
     ${REC ? `<div class="ctext rec"><span class="recdot"></span><b class="rectime">0:00</b><span class="muted">Enregistrement… (30 s max)</span><button class="btn small" data-x="recno">Annuler</button><button class="btn small primary" data-x="recok">Envoyer 🎤</button></div>`
-      : `<form class="ctext" data-x="form"><button type="button" class="cbtn${CHAT.quick ? ' on' : ''}" data-x="quick" aria-label="Messages rapides">⚡</button><input id="ctin" maxlength="200" placeholder="Écris un message…" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" aria-label="Message">
-      <button type="button" class="cbtn" data-x="mic" aria-label="Message vocal">🎤</button><button class="cbtn send" type="submit" aria-label="Envoyer">➤</button></form>`}
+      : `<form class="ctext" data-x="form"><button type="button" class="chbtn${CHAT.quick ? ' on' : ''}" data-x="quick" aria-label="Messages rapides">⚡</button><input id="ctin" maxlength="200" placeholder="Écris un message…" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" aria-label="Message">
+      <button type="button" class="chbtn" data-x="mic" aria-label="Message vocal">🎤</button><button class="chbtn send" type="submit" aria-label="Envoyer">➤</button></form>`}
     <p class="hint">Les gros mots, les liens et les numéros sont masqués automatiquement.${canNotif ? ' <button class="link" data-x="notif">Activer les notifications</button>' : ''}</p></div>`;
   const box = el.querySelector('#msgs'); box.scrollTop = box.scrollHeight;
   el.querySelector('[data-x=close]').onclick = closeChat;

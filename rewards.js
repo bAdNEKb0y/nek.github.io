@@ -1,12 +1,14 @@
 /* Récompenses : cadeau du jour (série de 7 jours), succès à débloquer, pack bonus tous les 20 packs */
 import { sb } from './net.js';
 import { $, esc } from './ui.js';
+import { EMOTES, emoteFor, isUnlocked, equipped, toggleEquip, MAX_EQUIP, emoteHTML, emoteName, RARITY } from './reactions.js';
 
 export const BONUS_EVERY = 20;
 const DAYS = [150, 200, 300, 400, 500, 700, 'bonus'];
 let H = null, ACH = null;
 
 export function initRewards(h) { H = h; }
+export const achievements = () => ACH || [];
 const col = () => H?.col();
 const fmt = n => n.toLocaleString('fr-FR');
 
@@ -74,19 +76,25 @@ function renderAch() {
     <div class="ai">${x.claimed ? '✅' : x.done ? '🏆' : '🔒'}</div>
     <div class="at"><b>${esc(x.name)}</b><small>${esc(x.txt)}</small>
       <div class="abar"><i style="width:${Math.round(x.cur / x.goal * 100)}%"></i></div><small class="anum">${fmt(x.cur)} / ${fmt(x.goal)}</small></div>
-    <div class="ar">${x.bonus ? '<span class="rbonus">🎁 Pack bonus</span>' : `<span class="coins">${fmt(x.coins)}</span>`}
+    <div class="ar">${x.bonus ? '<span class="rbonus">🎁 Pack bonus</span>' : `<span class="coins">${fmt(x.coins)}</span>`}${emoteFor(x.id) >= 0 ? `<span class="remo r-${EMOTES[emoteFor(x.id)].r}" title="${esc(emoteName(emoteFor(x.id)))}">+ ${emoteHTML(emoteFor(x.id), 24)}<i>${RARITY[EMOTES[emoteFor(x.id)].r]}</i></span>` : ''}
       ${x.done && !x.claimed ? `<button class="btn small primary" data-claim="${x.id}">Récupérer</button>` : ''}</div></li>`;
   el.innerHTML = `<div class="box setbox"><div class="cardhead"><h2>🏆 Succès</h2><button class="link" data-x="close">Fermer</button></div>
     ${!ACH ? '<p class="muted">Chargement…</p>' : `
     ${ready.length ? `<section class="setsec"><h3>À récupérer</h3><ul class="achs">${ready.map(row).join('')}</ul></section>` : ''}
+    <section class="setsec"><h3>Réactions de match</h3>
+      <p class="hint">Pendant un match, touche le rond 😀 pour envoyer une réaction. Choisis jusqu'à ${MAX_EQUIP} réactions pour ta roue. Les rares sont animées : débloque-les en récupérant des succès (Rare → Épique → Légendaire → Ultra-rare).</p>
+      <div class="emogrid">${EMOTES.map((m, i) => { const ok = isUnlocked(i), on = equipped().includes(i), q = list.find(a => a.id === m.q);
+        return `<button class="emocell r-${m.r}${ok ? '' : ' locked'}${on ? ' on' : ''}" data-eq="${i}" ${ok ? '' : 'disabled'} title="${esc(emoteName(i))}">${emoteHTML(i, 40)}<span class="rar">${RARITY[m.r]}</span><small>${ok ? (on ? '✓ roue' : 'ajouter') : '🔒 ' + esc(q?.name || 'succès')}</small></button>`; }).join('')}</div></section>
     <section class="setsec"><h3>Objectifs</h3><ul class="achs">${rest.map(row).join('')}</ul></section>`}</div>`;
   el.querySelector('[data-x=close]').onclick = closeAch;
+  el.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { const box = el.querySelector('.setbox'), y = box.scrollTop; if (toggleEquip(+b.dataset.eq)) { renderAch(); el.querySelector('.setbox').scrollTop = y; } else H.toast('Il faut au moins une réaction dans ta roue.'); });
   el.querySelectorAll('[data-claim]').forEach(b => b.onclick = async () => {
     b.disabled = true;
     const { data, error } = await sb.rpc('claim_achievement', { p_id: b.dataset.claim });
     if (error) { H.toast('Impossible de récupérer cette récompense.'); await loadAchievements(); return; }
     const c = col(); if (c) { c.coins = data.coins; c.bonus = data.bonus_packs; }
-    H.sound?.(); H.toast(data.got_bonus ? '🎁 Pack bonus gagné ! Va dans Packs pour l\'ouvrir.' : `+${fmt(data.got_coins)} pièces !`);
+    const em = emoteFor(b.dataset.claim);
+    H.sound?.(); H.toast((data.got_bonus ? '🎁 Pack bonus gagné ! Va dans Packs pour l\'ouvrir.' : `+${fmt(data.got_coins)} pièces !`) + (em >= 0 ? ` Nouvelle réaction de match : ${EMOTES[em].e}` : ''));
     H.changed?.(); await loadAchievements();
   });
 }

@@ -10,7 +10,8 @@ import { createRenderer, pickText, SIDE_COL } from './render.js';
 import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList, inviteToRoom, isOnline } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
-import { initRewards, renderRewardTiles, loadAchievements, openDaily, closeDaily, openAch, closeAch, BONUS_EVERY } from './rewards.js';
+import { initRewards, renderRewardTiles, loadAchievements, openDaily, closeDaily, openAch, closeAch, BONUS_EVERY, achievements } from './rewards.js';
+import { initReactions, showReactBtn, EMOTES, emoteHTML } from './reactions.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -19,7 +20,19 @@ const teamIdx = short => Math.max(0, TEAMS.findIndex(t => t.short === short));
 
 /* ---------- Écrans ---------- */
 const SCREENS = ['auth', 'home', 'club', 'shop', 'lobby', 'tlobby', 'pduel', 'game', 'end'];
-function show(id) { SCREENS.forEach(s => { const el = $('#' + s), was = el.hidden; el.hidden = s !== id; if (s === id && was) el.scrollTop = 0; }); } // nouvel écran : on repart du haut
+/* Clavier iPhone : on cale l'appli sur la partie visible de l'écran (sinon le haut part sous la barre et un grand vide apparaît) */
+(function fitViewport() {
+  const vv = window.visualViewport; if (!vv) return;
+  const root = document.documentElement;
+  const upd = () => {
+    const kb = innerHeight - vv.height > 120; // clavier ouvert
+    root.style.setProperty('--vvh', vv.height + 'px'); root.style.setProperty('--vvt', vv.offsetTop + 'px');
+    root.classList.toggle('kb', kb);
+    if (!kb && (scrollY || scrollX)) scrollTo(0, 0);
+  };
+  vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd); addEventListener('orientationchange', () => setTimeout(upd, 300)); upd();
+})();
+function show(id) { showReactBtn(id === 'game' && SET.reactBtn); SCREENS.forEach(s => { const el = $('#' + s), was = el.hidden; el.hidden = s !== id; if (s === id && was) el.scrollTop = 0; }); } // nouvel écran : on repart du haut
 let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 
@@ -35,6 +48,7 @@ function playEvent(type, val) {
   else if (type === 'save') SND.save();
   else if (type === 'steal') SND.steal();
   else if (type === 'header') SND.header();
+  else if (type === 'assist' && GAME && val === GAME.side) flashAssist();
   else if (type === 'volley') { SND.volley(); buzz([25, 20, 40]); }
   else if (type === 'bicycle') { SND.bicycle(); buzz([30, 30, 60]); }
   else if (type === 'cross') SND.cross();
@@ -96,7 +110,7 @@ async function afterLogin() {
     const st = await pushState();
     if (!asked && (st === 'off' || st === 'ios-home')) { try { localStorage.setItem('fdp-push-asked', '1'); } catch { } setTimeout(() => toast(st === 'ios-home' ? '🔔 Pour recevoir les notifs de tes amis : Partager ⬆️ → « Sur l\'écran d\'accueil ». Détails dans ⚙️ Paramètres.' : '🔔 Active les notifications dans ⚙️ Paramètres pour savoir quand tes amis t\'écrivent.'), 4500); }
   });
-  initSocial({ me: () => ME, col: () => COL, toast, busy: () => !!GAME || !!ROOM, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); }, inMatch: () => !!GAME && !GAME.done,
+  initSocial({ me: () => ME, col: () => COL, toast, busy: () => !!GAME || !!ROOM, sound: soft => { if (!SET.msgSound) return; audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); }, inMatch: () => !!GAME && !GAME.done,
     createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => joinAny(cleanCode(c)), onMeChange: () => renderMe(),
     reloadCol: async () => { await loadCollection(); renderMe(); }, alone: code => !!ROOM && LOB?.code === code && (LOB.multi ? !ROOM.peers.length : !LOB.peer), leaveIfAlone: code => { if (ROOM && LOB?.code === code && !(LOB.multi ? ROOM.peers.length : LOB.peer) && !GAME) leaveRoom(); },
     playing: () => (!!GAME && !GAME.done) || (!!DUEL && !DUEL.done) || (!!ROOM && !!LOB?.peer) });
@@ -104,7 +118,7 @@ async function afterLogin() {
   renderRewardTiles(); loadAchievements();
   if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
   else if (!tutoSeen()) openTuto();
-  else if (COL?.daily?.ready) setTimeout(() => { if (!$('#home').hidden && $('#pack').hidden && !GAME && !ROOM) openDaily(); }, 900); // cadeau du jour proposé à l'arrivée
+  else if (COL?.daily?.ready && SET.dailyPopup) setTimeout(() => { if (!$('#home').hidden && $('#pack').hidden && !GAME && !ROOM) openDaily(); }, 900); // cadeau du jour proposé à l'arrivée
   const q = new URLSearchParams(location.search).get('salle');
   if (q) { history.replaceState(null, '', location.pathname); joinAny(cleanCode(q)); }
 }
@@ -187,17 +201,31 @@ const SETUI = [
     ['diff', 'Niveau de l\'ordi', [[0, 'Facile'], [1, 'Normal'], [2, 'Costaud']]],
     ['soloDur', 'Durée contre l\'ordi', [[120, '2 min'], [180, '3 min'], [300, '5 min']]],
     ['replay', 'Ralenti après les buts', [[true, 'Oui'], [false, 'Non']]],
+    ['assist', 'Assistance au tir', [[true, 'Oui'], [false, 'Non']], 'Près du but, quand tu galères et qu\'une fenêtre s\'ouvre, ton joueur tire tout seul. En 1 contre 1, le créateur de la salle peut l\'interdire.'],
   ]],
   ['Commandes', [
     ['lefty', 'Main', [[false, 'Droitier'], [true, 'Gaucher']], 'Gaucher : joystick à droite, boutons à gauche'],
     ['btn', 'Taille des boutons', [[.85, 'Petits'], [1, 'Normaux'], [1.2, 'Grands']]],
     ['vib', 'Vibrations', [[true, 'Oui'], [false, 'Non']]],
   ]],
+  ['Réactions en match', [
+    ['reactBtn', 'Bouton des réactions 😀', [[true, 'Afficher'], [false, 'Cacher']]],
+    ['reacts', 'Réactions des autres', [['all', 'Les voir'], ['mine', 'Les cacher']]],
+    ['reactSound', 'Son des réactions', [[true, 'Oui'], [false, 'Non']]],
+  ]],
+  ['Messages', [
+    ['msgSound', 'Son et vibration des messages', [[true, 'Oui'], [false, 'Non']]],
+    ['quickOpen', 'Messages rapides', [[false, 'Repliés'], [true, 'Ouverts']], 'Ouverts : visibles dès que tu ouvres une discussion'],
+  ]],
+  ['Récompenses', [
+    ['dailyPopup', 'Cadeau du jour à l\'ouverture', [[true, 'Oui'], [false, 'Non']], 'Non : tu le récupères avec la tuile 🎁 de l\'accueil'],
+  ]],
   ['Affichage', [
     ['cam', 'Caméra', [['near', 'Proche'], ['wide', 'Tout le terrain']]],
     ['labels', 'Noms des joueurs', [[true, 'Oui'], [false, 'Non']]],
     ['aim', 'Cible des ballons en l\'air', [[true, 'Oui'], [false, 'Non']]],
     ['shake', 'Écran qui tremble sur les buts', [[true, 'Oui'], [false, 'Non']]],
+    ['mates', 'Pseudos des coéquipiers', [[true, 'Oui'], [false, 'Non']], 'Match à plusieurs : le pseudo de chaque ami au-dessus de son joueur'],
     ['saver', 'Économie de batterie', [[false, 'Non'], [true, 'Oui']], '30 images/s et moins de pixels : la batterie dure plus longtemps'],
     ['fps', 'Afficher les images/s', [[false, 'Non'], [true, 'Oui']]],
   ]],
@@ -375,10 +403,10 @@ const myTeamObj = idx => idx === -1 && COL ? customTeam(COL.team) : TEAMS[Math.m
 let ROOM = null, LOB = null;
 async function enterRoom(code, role) {
   if (ROOM) await ROOM.leave();
-  LOB = { code, role, team: ME.fav_team === 'PERSO' && COL ? -1 : teamIdx(ME.fav_team), ready: false, dur: 180, mode: 'match', dpack: 'stars', drounds: 5, matchNo: 0, peer: null };
+  LOB = { code, role, team: ME.fav_team === 'PERSO' && COL ? -1 : teamIdx(ME.fav_team), ready: false, dur: 180, mode: 'match', dpack: 'stars', drounds: 5, assistOk: 1, matchNo: 0, peer: null };
   const room = new Room(code, { uid: ME.id, name: ME.display, rating: ME.rating, fav: LOB.team }, role);
   ROOM = room;
-  Object.assign(room.state, { dur: LOB.dur, mode: LOB.mode, dpack: LOB.dpack, drounds: LOB.drounds });
+  Object.assign(room.state, { dur: LOB.dur, mode: LOB.mode, dpack: LOB.dpack, drounds: LOB.drounds, assistOk: LOB.assistOk, assist: !!SET.assist });
   room.on('peer', p => { LOB.peer = p; renderLobby(); maybeStart(); if (DUEL && !DUEL.done && !p) { toast('Ton adversaire s\'est déconnecté.'); endDuel('quit'); } if (GAME && GAME.online) GAME.peerSeen = p ? performance.now() : GAME.peerSeen; if (GAME && GAME.online && !p) GAME.peerGoneAt ||= performance.now(); if (GAME && p) GAME.peerGoneAt = 0; });
   room.on('link', l => { renderNet(l); if (GAME) GAME.net = l; });
   room.on('full', () => { toast('Cette salle est déjà complète.'); leaveRoom(); });
@@ -406,7 +434,7 @@ async function enterTeamRoom(code, role) {
   LOB = { code, role, multi: true, side: role === 'host' ? 0 : 1, ready: role === 'host', ca: fav, cb: (fav + 7) % TEAMS.length, dur: 180, matchNo: 0, members: [], picked: role === 'host', peer: null };
   const room = new Room(code, { uid: ME.id, name: ME.display, rating: ME.rating }, role, { max: TMAX, prefix: 'team:' });
   ROOM = room;
-  Object.assign(room.state, { side: LOB.side, ready: LOB.ready, ca: LOB.ca, cb: LOB.cb, dur: LOB.dur });
+  Object.assign(room.state, { side: LOB.side, ready: LOB.ready, ca: LOB.ca, cb: LOB.cb, dur: LOB.dur, assist: !!SET.assist });
   room.on('peers', list => {
     LOB.members = list;
     if (!LOB.picked && list.some(p => p.uid === ME.id) && list.some(p => p.role === 'host')) { // un invité se met dans l'équipe la moins remplie
@@ -484,13 +512,13 @@ $('#tStart').addEventListener('click', () => {
   if (!LOB?.multi || LOB.role !== 'host' || GAME) return;
   audio(); goFull();
   const others = (LOB.members || []).filter(p => p.uid !== ME.id && p.ready);
-  const members = [{ uid: ME.id, name: ME.display, side: LOB.side }, ...others.map(p => ({ uid: p.uid, name: p.name, side: p.side ?? 1 }))];
+  const members = [{ uid: ME.id, name: ME.display, side: LOB.side, assist: !!SET.assist }, ...others.map(p => ({ uid: p.uid, name: p.name, side: p.side ?? 1, assist: p.assist !== false }))];
   if ([0, 1].some(t => members.filter(p => p.side === t).length > SIDE_MAX)) { toast('Maximum 4 joueurs par équipe.'); return; }
   const st = tState(), teams = [TEAMS[st.ca], TEAMS[st.cb]];
   const nm = t => members.filter(p => p.side === t).map(p => p.name).join(' · ') || 'Ordi';
   LOB.matchNo++;
   const cfg = { multi: true, teams, dur: st.dur, n: LOB.matchNo, mid: `${LOB.code}-${Math.random().toString(36).slice(2, 7)}`, diff: 1,
-    slots: members.map(p => p.side), uids: members.map(p => p.uid), pn: members.map(p => p.name), names: [nm(0), nm(1)] };
+    slots: members.map(p => p.side), assist: members.map(p => p.assist), uids: members.map(p => p.uid), pn: members.map(p => p.name), names: [nm(0), nm(1)] };
   ROOM.send('tstart', cfg); setTimeout(() => ROOM?.send('tstart', cfg), 500); // envoyé deux fois au cas où
   startMulti(cfg, 0);
 });
@@ -538,8 +566,10 @@ function renderLobby() {
   chips('#modeChips', [['match', 'Match'], ['duel', 'Duel de packs']], mode, 'mode');
   chips('#dpChips', [['or', 'Or'], ['stars', 'Stars'], ['leg', 'Légende'], ['icon', 'Icône']], dpack, 'dpack');
   chips('#drChips', [[3, '3'], [5, '5'], [10, '10']], drounds, 'drounds');
+  const assistOk = src.assistOk ?? 1; if (!host) LOB.assistOk = assistOk;
+  chips('#asChips', [[1, 'Autorisée'], [0, 'Désactivée']], assistOk, 'assistOk');
   const duel = mode === 'duel';
-  ['#durLbl', '#durChips'].forEach(x => $(x).hidden = duel); ['#dpLbl', '#dpChips', '#drLbl', '#drChips'].forEach(x => $(x).hidden = !duel);
+  ['#durLbl', '#durChips', '#asLbl', '#asChips'].forEach(x => $(x).hidden = duel); ['#dpLbl', '#dpChips', '#drLbl', '#drChips'].forEach(x => $(x).hidden = !duel);
   $('#teamGrid').closest('.card').hidden = duel;
   $('#durChips').innerHTML = [[120, '2 min'], [180, '3 min'], [300, '5 min']].map(([v, l]) => `<button class="chip" data-dur="${v}" aria-pressed="${dur === v}" ${LOB.role !== 'host' ? 'disabled' : ''}>${l}</button>`).join('');
   $('#durChips').querySelectorAll('[data-dur]').forEach(b => b.onclick = () => { if (LOB.role !== 'host') return; LOB.dur = +b.dataset.dur; ROOM.setState({ dur: LOB.dur }); renderLobby(); });
@@ -570,7 +600,7 @@ async function maybeStart() {
   LOB.starting = false;
   if (!LOB || GAME || !LOB.ready || !LOB.peer?.ready) return;
   LOB.matchNo++;
-  const cfg = { teams, dur: LOB.dur, n: LOB.matchNo, mid: `${LOB.code}-${Math.random().toString(36).slice(2, 8)}`, uids: [ME.id, LOB.peer.uid], names: [ME.display, LOB.peer.name] };
+  const cfg = { teams, dur: LOB.dur, assist: [!!(LOB.assistOk && SET.assist), !!(LOB.assistOk && peer.assist !== false)], n: LOB.matchNo, mid: `${LOB.code}-${Math.random().toString(36).slice(2, 8)}`, uids: [ME.id, LOB.peer.uid], names: [ME.display, LOB.peer.name] };
   ROOM.send('start', cfg);
   startOnline(cfg, 0);
 }
@@ -583,6 +613,7 @@ function onRoomMsg(k, d) {
   }
   if (k.startsWith('d') && onDuelMsg(k, d)) return;
   if (!GAME) return;
+  if (k === 'emo') { if (d && Number.isInteger(d.e) && Number.isInteger(d.s) && d.s !== GAME.slot) addReact(GAME, GAME.multi ? d.s : 1 - GAME.slot, d.e); return; }
   if (k === 's' && !GAME.host) GAME.onSnap(d);
   else if (k === 'i' && GAME.host) { const s = GAME.multi ? d.s : 1; if (s > 0 && s < GAME.slots.length) GAME.remotes[s] = d; }
   else if (k === 'end' && !GAME.host) GAME.onEnd(d);
@@ -592,6 +623,32 @@ function onRoomMsg(k, d) {
     else if (GAME.host && d?.s > 0) GAME.remotes[d.s] = null, (GAME.left ||= new Set()).add(d.s);
   }
 }
+/* ---------- Réactions en match ---------- */
+function addReact(g, slot, i) {
+  const m = EMOTES[i]; if (!g || !m || !Number.isInteger(slot) || slot < 0 || slot >= g.slots.length) return;
+  if (slot !== g.slot && SET.reacts === 'mine') return; // réactions des autres masquées
+  const now = performance.now(); g.reacts ||= [];
+  if (g.reacts.some(r => r.slot === slot && now - r.t0 < 1500)) return; // pas de spam
+  const layer = reactLayer(), el = document.createElement('div');
+  el.className = `rbub r-${m.r}${m.a ? ' big' : ''}`; el.innerHTML = emoteHTML(i, m.a ? 74 : 44);
+  layer.appendChild(el);
+  g.reacts.push({ slot, i, t0: now, el, life: m.a ? 3600 : 2600 }); if (g.reacts.length > 8) g.reacts.shift().el.remove();
+  if (SET.reactSound) { if (m.r === 'u' || m.r === 'l') { tone(523, .1, 'triangle', .08, 784); setTimeout(() => tone(784, .14, 'triangle', .08, 1046), 110); } else tone(660, .08, 'sine', .06, 990); }
+}
+function reactLayer() { let l = $('#reactLayer'); if (!l) { $('#game').insertAdjacentHTML('beforeend', '<div id="reactLayer" class="react-layer" aria-hidden="true"></div>'); l = $('#reactLayer'); } return l; }
+/** Place les bulles de réaction au-dessus du joueur de chacun (à chaque image) */
+function placeReacts(g, V, now) {
+  if (!g.reacts?.length) return;
+  g.reacts = g.reacts.filter(r => { if (now - r.t0 > r.life) { r.el.remove(); return false; } return true; });
+  for (const r of g.reacts) {
+    const pi = V?.c?.[r.slot], p = pi != null && pi >= 0 ? V.p[pi] : null;
+    if (!p) { r.el.style.opacity = '0'; continue; }
+    const [x, y] = R.toScreen(p[0], p[1]);
+    r.el.style.opacity = ''; r.el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
+  }
+}
+function clearReacts(g) { for (const r of g?.reacts || []) r.el.remove(); if (g) g.reacts = []; }
+initReactions({ achievements, onPick: i => { const g = GAME; if (!g || g.done) return; addReact(g, g.slot, i); if (g.online) ROOM?.send('emo', { s: g.slot, e: i }); } });
 /** Hôte d'un match à plusieurs : cet humain est parti ? (l'ordi reprend son joueur) */
 function slotGone(g, s) {
   if (!g.multi) return false;
@@ -833,7 +890,7 @@ function resetLocalInput() { Object.assign(LI, { tx: 0, ty: 0, joyOn: false, a: 
 function startSolo() {
   const custom = ME?.fav_team === 'PERSO' && COL;
   const t0 = teamIdx(ME?.fav_team || 'PSG'); let t1 = Math.floor(Math.random() * TEAMS.length); if (!custom && t1 === t0) t1 = (t1 + 1) % TEAMS.length;
-  const cfg = { teams: [custom ? customTeam(COL.team) : TEAMS[t0], TEAMS[t1]], dur: SET.soloDur || 180, diff: SET.diff ?? 1 };
+  const cfg = { teams: [custom ? customTeam(COL.team) : TEAMS[t0], TEAMS[t1]], dur: SET.soloDur || 180, diff: SET.diff ?? 1, assist: [!!SET.assist] };
   beginGame({ cfg, side: 0, online: false, names: [ME?.display || 'Toi', 'Ordi'] });
 }
 function startOnline(cfg, side) {
@@ -853,7 +910,7 @@ function beginGame({ cfg, side, online, names, uids, slot = side, host = side ==
     remotes: [], prevs: slots.map(() => ({ a: 0, l: 0, b: 0, r: 0 })), prevL: { a: 0, l: 0, b: 0, r: 0 }, snaps: [], lastSnapAt: performance.now(),
     acc: 0, tick: 0, sentAt: 0, lastSent: '', done: false, peerGoneAt: 0, endData: null,
   };
-  if (host) g.G = createMatch({ teams: M.team, dur: cfg.dur, humans, slots, diff: cfg.diff ?? 1 });
+  if (host) g.G = createMatch({ teams: M.team, dur: cfg.dur, humans, slots, diff: cfg.diff ?? 1, assist: cfg.assist || null });
   g.onSnap = d => { const now = performance.now(); const dtA = now - g.lastSnapAt; if (dtA > 0 && dtA < 400) { g.ia = g.ia ? g.ia * .9 + dtA * .1 : dtA; g.jit = (g.jit || 0) * .9 + Math.abs(dtA - g.ia) * .1; } g.lastSnapAt = now; if (g.snaps.length && d.q <= g.snaps[g.snaps.length - 1].q) return; g.snaps.push({ at: now, q: d.q, s: d.s }); if (g.snaps.length > 30) g.snaps.shift(); };
   g.onEnd = d => { if (!g.done) finishGame(d); };
   g.forfeit = (iWin, msg) => {
@@ -970,6 +1027,7 @@ function frame(now) {
     const rp = replayFrame(g, now);
     if (SET.saver && (g.fr = (g.fr || 0) + 1) % 2) { requestAnimationFrame(frame); return; } // économie : 30 images/s
     R.draw(rp || g.V, g.M, { me: g.side, slot: g.slot, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
+    placeReacts(g, rp ? null : g.V, now);
   }
   requestAnimationFrame(frame);
 }
@@ -985,7 +1043,7 @@ $('#bQuit').addEventListener('click', () => {
   $('#menu').hidden = true;
   if (!GAME) return;
   if (GAME.online) { ROOM?.send('quit', { host: GAME.host, s: GAME.slot }); GAME.forfeit(false, GAME.multi ? 'Tu as quitté le match.' : 'Tu as abandonné le match.'); }
-  else { stopReplay(GAME); crowdStop(); GAME = null; renderHome(); show('home'); }
+  else { stopReplay(GAME); crowdStop(); clearReacts(GAME); GAME = null; renderHome(); show('home'); }
 });
 
 /* ---------- Fin du match ---------- */
@@ -997,7 +1055,7 @@ function noteOf(p, score) {
 }
 async function finishGame(sum) {
   const g = GAME; if (!g || g.done) return;
-  g.done = true; clearTimeout(g.endTimer); stopReplay(g); crowdStop();
+  g.done = true; clearTimeout(g.endTimer); stopReplay(g); crowdStop(); clearReacts(g);
   try { wake?.release(); } catch { }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
   const me = g.side, op = 1 - me, M = g.M, sc = sum.score || [0, 0];
@@ -1079,3 +1137,11 @@ function renderEnd(g, sum, rating) {
   sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT') { ME = null; show('auth'); } });
 })();
 window.__fdp = { get GAME() { return GAME; }, startSolo };
+
+/** Petit message « Tir assisté » au centre de l'écran */
+function flashAssist() {
+  let el = $('#assistFlash'); if (!el) { $('#game').insertAdjacentHTML('beforeend', '<div id="assistFlash" class="assist-flash" aria-live="polite">🎯 Tir assisté</div>'); el = $('#assistFlash'); }
+  el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+}
+// réglages appliqués tout de suite (sans relancer)
+onSetting(k => { if (k === 'assist' && ROOM) ROOM.setState({ assist: !!SET.assist }); if (k === 'reactBtn') showReactBtn(!$('#game').hidden && SET.reactBtn); if (k === 'reacts' && SET.reacts === 'mine' && GAME) { GAME.reacts = (GAME.reacts || []).filter(r => { if (r.slot !== GAME.slot) { r.el.remove(); return false; } return true; }); } });

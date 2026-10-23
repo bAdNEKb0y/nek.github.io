@@ -10,6 +10,7 @@
 }
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%;margin:0}
+html{-webkit-text-size-adjust:100%;-moz-text-size-adjust:100%;text-size-adjust:100%} /* iPhone : pas de grossissement du texte en paysage */
 body{background:var(--night);color:var(--chalk);font:15px/1.4 var(--f-body);-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
 [hidden]{display:none!important}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
@@ -732,9 +733,9 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .ctext{display:flex;align-items:center;gap:6px;padding:8px 0 4px;border-top:1px solid var(--line)}
 .ctext input{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:10px 14px;font-size:16px;color:var(--chalk)}
 .ctext input:focus{outline:none;border-color:var(--flood)}
-.cbtn{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:var(--panel);border:1px solid var(--line)}
-.cbtn.on{background:var(--flood);border-color:var(--flood)}
-.cbtn.send{background:var(--flood);color:var(--night);font-weight:800}
+.chbtn{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:var(--panel);border:1px solid var(--line)}
+.chbtn.on{background:var(--flood);border-color:var(--flood)}
+.chbtn.send{background:var(--flood);color:var(--night);font-weight:800}
 .ctext.rec{gap:10px}
 .ctext.rec .muted{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .recdot{width:12px;height:12px;border-radius:50%;background:var(--loss);flex:none;animation:recp 1s infinite}
@@ -747,8 +748,120 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 @keyframes vw{to{opacity:.4}}
 .vmsg b{font-size:12px;font-variant-numeric:tabular-nums}
 #chat .qwrap{border-top:1px solid var(--line)}
-@media (max-height:500px){.cbtn{width:36px;height:36px;font-size:15px}.ctext input{padding:7px 12px}.ctext{padding:5px 0 2px}}
+@media (max-height:500px){.chbtn{width:36px;height:36px;font-size:15px}.ctext input{padding:7px 12px}.ctext{padding:5px 0 2px}}
 #chat .setbox.chatbox{grid-template-columns:minmax(0,1fr)}
 #chat .chatbox>*{min-width:0}
 .ctext .btn.small{text-transform:none;padding:6px 12px;font-size:14px}
 @media (max-width:420px){.ctext.rec .muted{display:none}}
+/* L'appli suit la zone visible quand le clavier est ouvert (iPhone) */
+#app{top:var(--vvt,0px);height:var(--vvh,100%);bottom:auto}
+html.kb .setov .setbox>.cardhead{padding-top:8px}
+html.kb #chat .chatbox>.hint{display:none}
+html.kb #chat .cardhead small{display:none}
+
+/* ---------- Réactions en match ---------- */
+.emo-btn{position:absolute;z-index:6;right:max(14px,env(safe-area-inset-right));top:calc(env(safe-area-inset-top,0px) + 64px);width:52px;height:52px;border-radius:50%;
+  display:grid;place-items:center;background:rgba(10,18,15,.72);border:2px solid rgba(255,255,255,.35);box-shadow:0 4px 14px rgba(0,0,0,.35);touch-action:manipulation;transition:transform .2s}
+.emo-btn span{font-size:26px;line-height:1}
+.emo-btn svg{position:absolute;inset:-4px;width:calc(100% + 8px);height:calc(100% + 8px);transform:rotate(-90deg);pointer-events:none}
+.emo-btn svg circle{fill:none;stroke:var(--flood);stroke-width:3;stroke-dasharray:100.5;stroke-dashoffset:100.5;opacity:0}
+.emo-btn.open{transform:scale(1.08);border-color:var(--flood)}
+.emo-btn.cool{animation:emoShrink 4s linear forwards}
+.emo-btn.cool svg circle{opacity:1;animation:emoRing 4s linear forwards}
+@keyframes emoShrink{0%{transform:scale(1.15)}8%{transform:scale(.6)}92%{transform:scale(.6)}100%{transform:scale(1)}}
+@keyframes emoRing{from{stroke-dashoffset:100.5}to{stroke-dashoffset:0}}
+.emo-wheel{position:absolute;inset:0;z-index:7;display:grid;place-items:center;background:rgba(4,8,6,.35)}
+.emo-ring{position:relative;width:0;height:0}
+.emo-mid{position:absolute;left:-26px;top:-26px;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:rgba(10,18,15,.85);border:2px solid var(--flood);color:var(--flood);font-weight:800}
+.emo-it{position:absolute;left:-28px;top:-28px;width:56px;height:56px;border-radius:50%;font-size:30px;display:grid;place-items:center;background:rgba(255,255,255,.95);
+  box-shadow:0 4px 12px rgba(0,0,0,.35);transform:translate(var(--x),var(--y)) scale(1);animation:emoIn .22s var(--d) both cubic-bezier(.3,1.6,.6,1)}
+.emo-it:active{transform:translate(var(--x),var(--y)) scale(.88)}
+@keyframes emoIn{from{transform:translate(0,0) scale(.2);opacity:0}}
+@media (max-height:420px){.emo-btn{width:44px;height:44px;top:calc(env(safe-area-inset-top,0px) + 52px)}.emo-btn span{font-size:22px}.emo-it{width:48px;height:48px;left:-24px;top:-24px;font-size:26px}}
+/* Succès : grille des réactions */
+.emogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.emocell{display:grid;justify-items:center;gap:2px;padding:8px 2px;border-radius:12px;background:var(--panel);border:1px solid var(--line);min-width:0}
+.emocell b{font-size:26px;line-height:1.1}
+.emocell small{font-size:10px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.emocell.on{border-color:var(--flood);background:rgba(255,201,74,.12)}.emocell.on small{color:var(--flood)}
+.emocell.locked{opacity:.55}.emocell.locked b{filter:grayscale(1)}
+.remo{font-size:12px;font-weight:800;color:var(--j2);white-space:nowrap}
+
+/* ---------- Réactions : émojis et animations de Pocho ---------- */
+.react-layer{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden}
+.rbub{position:absolute;left:0;top:0;will-change:transform}
+.rbub>.emo{position:absolute;left:calc(var(--s) / -2 - 8px);top:calc(var(--s) * -1 - 46px);padding:6px;border-radius:50%;background:rgba(255,255,255,.95);
+  box-shadow:0 6px 18px rgba(0,0,0,.35);animation:rbIn .35s cubic-bezier(.3,1.7,.6,1) both, rbOut .5s ease-in forwards;animation-delay:0s, calc(var(--life, 2.1s))}
+.rbub>.emo::after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-bottom:0;border-top-color:rgba(255,255,255,.95)}
+.rbub.big>.emo{--life:3.1s}
+@keyframes rbIn{from{transform:scale(.2) translateY(20px);opacity:0}}
+@keyframes rbOut{to{transform:translateY(-14px) scale(.8);opacity:0}}
+.emo{display:inline-grid;place-items:center;width:var(--s);height:var(--s);position:relative;flex:none}
+.emo-e{font-size:calc(var(--s) * .78);line-height:1}
+.emo svg{width:100%;height:100%;overflow:visible}
+/* auras de rareté (comme des cartes) */
+.rbub>.emo.r-r,.emo-it.r-r{box-shadow:0 0 0 3px #5ad1e6,0 6px 18px rgba(0,0,0,.35)}
+.rbub>.emo.r-e,.emo-it.r-e{box-shadow:0 0 0 3px #a78bfa,0 0 18px rgba(167,139,250,.7)}
+.rbub>.emo.r-l,.emo-it.r-l{box-shadow:0 0 0 3px #f3d27a,0 0 24px rgba(255,214,102,.85)}
+.rbub>.emo.r-u,.emo-it.r-u{box-shadow:0 0 0 3px #fff,0 0 28px #ff5fd2;animation:rbIn .35s cubic-bezier(.3,1.7,.6,1) both, rbOut .5s ease-in forwards, ultraGlow 1.2s linear infinite;animation-delay:0s, calc(var(--life, 2.1s)), 0s}
+.emo-it.r-u{animation:emoIn .22s var(--d) both cubic-bezier(.3,1.6,.6,1), ultraGlow 1.2s linear infinite}
+@keyframes ultraGlow{0%{box-shadow:0 0 0 3px #fff,0 0 26px #ff5fd2}33%{box-shadow:0 0 0 3px #fff,0 0 30px #5ad1e6}66%{box-shadow:0 0 0 3px #fff,0 0 30px #ffd23f}100%{box-shadow:0 0 0 3px #fff,0 0 26px #ff5fd2}}
+/* animations de la mascotte */
+.emo .body{transform-origin:50px 60px;transform-box:view-box}
+.emo .bounce{animation:pBounce .5s ease-in-out infinite alternate}
+@keyframes pBounce{from{transform:translateY(4px) scale(1.04,.96)}to{transform:translateY(-6px) scale(.97,1.03)}}
+.emo .shiver{animation:pShiver .18s linear infinite}
+@keyframes pShiver{25%{transform:translateX(-1.5px)}75%{transform:translateX(1.5px)}}
+.emo .wiggle{animation:pWiggle .45s ease-in-out infinite alternate}
+@keyframes pWiggle{from{transform:rotate(-12deg) translateX(-3px)}to{transform:rotate(12deg) translateX(3px)}}
+.emo .pulse{animation:pPulse .6s ease-in-out infinite alternate}
+@keyframes pPulse{to{transform:scale(1.08)}}
+.emo .zap{animation:pShiver .1s linear infinite}
+.emo .tear{animation:pTear .7s ease-in infinite;transform-box:view-box}
+.emo .tear.t2{animation-delay:.35s}
+@keyframes pTear{from{transform:translateY(0);opacity:1}to{transform:translateY(16px);opacity:0}}
+.emo .flow{animation:pFlow .5s linear infinite;transform-box:view-box}
+@keyframes pFlow{0%{opacity:.6;transform:scaleY(.6)}50%{opacity:1;transform:scaleY(1)}100%{opacity:.6;transform:scaleY(.6)}}
+.emo .note{font-size:20px;font-weight:900;fill:#1b2420;animation:pNote 1s ease-out infinite}
+.emo .note.n2{animation-delay:.5s}
+@keyframes pNote{from{transform:translateY(8px);opacity:0}30%{opacity:1}to{transform:translateY(-14px);opacity:0}}
+.emo .flames{transform-origin:50px 80px;transform-box:view-box;animation:pFlame .25s ease-in-out infinite alternate}
+@keyframes pFlame{from{transform:scale(.94,.9)}to{transform:scale(1.04,1.08)}}
+.emo .hearteye{transform-origin:50px 52px;transform-box:view-box;animation:pPulse .35s ease-in-out infinite alternate}
+.emo .fh{animation:pNote 1.2s ease-out infinite}.emo .fh.h2{animation-delay:.6s}
+.emo .crown{transform-origin:50px 14px;transform-box:view-box;animation:pCrown 1s ease-in-out infinite alternate}
+@keyframes pCrown{from{transform:rotate(-6deg) translateY(1px)}to{transform:rotate(6deg) translateY(-2px)}}
+.emo .spark{transform-box:fill-box;transform-origin:center;animation:pSpark .8s ease-in-out infinite alternate}.emo .spark.s2{animation-delay:.4s}
+@keyframes pSpark{from{transform:scale(.3) rotate(0);opacity:.3}to{transform:scale(1.2) rotate(45deg);opacity:1}}
+.emo .bolt{animation:pBolt .5s steps(2) infinite}.emo .bolt.b2{animation-delay:.25s}
+@keyframes pBolt{0%{opacity:1}100%{opacity:0}}
+.emo .shine{animation:pShine 1.4s ease-in-out infinite;transform-box:view-box}
+@keyframes pShine{from{transform:translateX(-10px) skewX(-20deg);opacity:0}50%{opacity:.7}to{transform:translateX(36px) skewX(-20deg);opacity:0}}
+.emo .confetti rect{animation:pConf 1.1s linear infinite;transform-box:fill-box}
+.emo .confetti rect:nth-child(2){animation-delay:.3s}.emo .confetti rect:nth-child(3){animation-delay:.6s}.emo .confetti rect:nth-child(4){animation-delay:.85s}
+@keyframes pConf{from{transform:translateY(-6px) rotate(0)}to{transform:translateY(60px) rotate(360deg);opacity:0}}
+.emo .orbit{transform-origin:50px 52px;transform-box:view-box;animation:pSpin 2s linear infinite}
+.emo .rays{transform-origin:50px 50px;transform-box:view-box;animation:pSpin 4s linear infinite}
+@keyframes pSpin{to{transform:rotate(360deg)}}
+.emo.a-galaxie{background:radial-gradient(circle,#3b1f73,#140a2a 70%)!important}
+.emo.a-arcenciel svg{animation:pHue 2s linear infinite}
+@keyframes pHue{to{filter:hue-rotate(360deg)}}
+.emo.a-goat{overflow:visible}
+.goat-rays{position:absolute;inset:-12%;border-radius:50%;background:repeating-conic-gradient(from 0deg,rgba(255,214,102,.75) 0 12deg,transparent 12deg 30deg);animation:pSpin 3s linear infinite}
+.goat-e{position:relative;font-size:calc(var(--s) * .62);line-height:1;animation:pBounce .45s ease-in-out infinite alternate;filter:drop-shadow(0 0 6px #ffd23f)}
+.goat-t{position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);font:900 calc(var(--s) * .2)/1 var(--f-display);color:#3b2a06;background:linear-gradient(90deg,#f3d27a,#fff3c4,#f3d27a);padding:1px 6px;border-radius:6px;letter-spacing:.06em}
+.emo-btn span .emo{--s:30px}
+.emo-it{background:#fff}
+.emo-it .emo{pointer-events:none}
+/* Succès : grille des réactions avec rareté */
+.emocell .emo{--s:40px}
+.emocell .rar{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.emocell.r-r .rar{color:#5ad1e6}.emocell.r-e .rar{color:#a78bfa}.emocell.r-l .rar{color:#f3d27a}.emocell.r-u .rar{background:linear-gradient(90deg,#ff5fd2,#5ad1e6,#ffd23f);-webkit-background-clip:text;background-clip:text;color:transparent}
+.emocell.r-u{border-color:#ff5fd2}.emocell.r-l{border-color:#c9962e}
+@media (prefers-reduced-motion:reduce){.emo *{animation:none!important}}
+.remo{display:inline-flex;align-items:center;gap:3px}.remo .emo{--s:24px}.remo i{font-style:normal;font-size:9px;text-transform:uppercase}
+.remo.r-e{color:#a78bfa}.remo.r-l{color:#f3d27a}.remo.r-u{color:#ff7ae0}
+.emocell .goat-t,.remo .goat-t,.emo-btn .goat-t{display:none}
+.assist-flash{position:absolute;left:50%;top:22%;z-index:6;transform:translateX(-50%);pointer-events:none;opacity:0;padding:6px 14px;border-radius:999px;background:rgba(10,18,15,.8);border:1px solid var(--flood);color:var(--flood);font:800 15px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase}
+.assist-flash.on{animation:asF 1.1s ease-out}
+@keyframes asF{0%{opacity:0;transform:translate(-50%,8px)}15%{opacity:1;transform:translate(-50%,0)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-6px)}}

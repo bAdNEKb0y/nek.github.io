@@ -15,6 +15,14 @@ export const DEF = {
   shake: true,      // tremblement de l'écran sur les buts
   saver: false,     // économie de batterie (30 images/s, moins de pixels)
   fps: false,       // afficher les images/s
+  reacts: 'all',    // réactions en match : 'all' (toutes) ou 'mine' (seulement les miennes)
+  reactBtn: true,   // bouton 😀 des réactions pendant le match
+  reactSound: true, // petit son quand une réaction arrive
+  mates: true,      // pseudos des coéquipiers en match à plusieurs
+  msgSound: true,   // son + vibration des messages d'amis
+  quickOpen: false, // messages rapides ouverts directement dans le chat
+  dailyPopup: true, // cadeau du jour proposé à l'ouverture du jeu
+  assist: true,     // assistance au tir près du but
 };
 let S = { ...DEF };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { }

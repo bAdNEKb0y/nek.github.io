@@ -126,6 +126,7 @@ function moveTo(G, p, tx, ty, u, dt) {
 function giveBall(G, p) {
   const b = G.ball;
   const prev = b.last;
+  p.assisted = false; p.zoneT = 0;
   b.owner = p; b.vx = b.vy = 0; b.z = b.vz = 0; b.cross = false; b.last = p; b.protect = .7; G.passTarget = null; G.passPt = null;
   if (G.hum[p.t] && !p.gk && !isCtrl(G, p)) {
     // le ballon arrive chez un joueur libre : l'humain qui a fait la passe le suit, sinon le plus proche
@@ -303,6 +304,17 @@ function bestPassTarget(G, p, allowBack) {
 }
 function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy || 1; const t = clamp(((px - ax) * dx + (py - ay) * dy) / l, 0, 1); return hyp(px - ax - dx * t, py - ay - dy * t); }
 
+/** Meilleur angle de tir libre (aucun adversaire sur la trajectoire), ou null s'il n'y a pas de fenêtre */
+function assistAim(G, p) {
+  const gy = atkY(p.t), b = G.ball; let best = null, bc = 0;
+  for (const aim of [-.75, -.4, 0, .4, .75]) {
+    const tx = CX + aim * (GH - 1.1);
+    let clear = 99;
+    for (const o of G.byTeam[1 - p.t]) clear = Math.min(clear, segDist(o.x, o.y, b.x, b.y, tx, gy));
+    if (clear > bc) { bc = clear; best = aim; }
+  }
+  return bc > 2 ? best : null;
+}
 /* ---------- Joueur humain ---------- */
 function humanControl(G, s, I, dt) {
   const t = G.slots[s], b = G.ball, own = b.owner;
@@ -320,6 +332,16 @@ function humanControl(G, s, I, dt) {
   else steer(c, 0, 0, dt);
 
   if (own === c) {
+    // Assistance au tir : près du but, quand on galère et qu'une fenêtre s'ouvre, ça tire tout seul
+    if (G.cfg.assist?.[s] && !I.a && !I.lob && !I.bDown && !I.rel && G.state === 'play') {
+      const near = toGoalOf(t, c.y) < 19 && Math.abs(c.x - CX) < 15;
+      c.zoneT = near ? (c.zoneT || 0) + dt : 0;
+      const pressed = G.byTeam[1 - t].some(o => !o.gk && dist(o, c) < 3.6);
+      if (near && (c.zoneT > 1 || (pressed && c.zoneT > .35)) && !c.assisted) {
+        const aim = assistAim(G, c);
+        if (aim != null) { c.assisted = true; c.zoneT = 0; shoot(G, c, .8, aim); G.charge[s] = 0; G.preview[s] = null; ev(G, 'assist', { t }); return; }
+      }
+    }
     const dx = mag > .3 ? I.jx / I.mag : c.fx, dy = mag > .3 ? I.jy / I.mag : c.fy;
     G.preview[s] = choosePass(G, c, dx, dy);
     if (I.lob) { passTo(G, c, chooseLongPass(G, c, dx, dy), { loft: true }); G.charge[s] = 0; G.preview[s] = null; }

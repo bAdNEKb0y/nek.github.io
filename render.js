@@ -237,7 +237,7 @@ export function createRenderer(canvas) {
       const c = SIDE_COL[t], ay = y - r * 2.05 + Math.sin(performance.now() / 180) * r * .12;
       ctx.fillStyle = mine || !M.coop ? c : '#ffffff'; ctx.strokeStyle = 'rgba(8,12,10,.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(x - r * .5, ay - r * .5); ctx.lineTo(x + r * .5, ay - r * .5); ctx.lineTo(x, ay + r * .1); ctx.closePath(); ctx.fill(); ctx.stroke();
-      if (M.coop && M.pn?.[sl]) PSEUDOS.push([M.pn[sl], x, ay - r * .6, mine ? c : '#ffffff', r]); // pseudo de l'humain qui le joue
+      if (M.coop && SET.mates && M.pn?.[sl]) PSEUDOS.push([M.pn[sl], x, ay - r * .6, mine ? c : '#ffffff', r]); // pseudo de l'humain qui le joue
     }
     if (SET.labels ? (ctrl || V.b[3] === i) : (ctrl && V.b[3] === i && V.ch[sl] > 0)) LABELS.push([i, x, y, r, ctrl, sl]);
   }
@@ -246,6 +246,25 @@ export function createRenderer(canvas) {
   function drawPseudo([nm, x, y, col, r]) {
     const fz = Math.max(9, r * .72); ctx.font = `800 ${fz}px ${FD}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,10,8,.85)'; ctx.strokeText(nm, x, y); ctx.fillStyle = col; ctx.fillText(nm, x, y);
+  }
+  /** Réactions : bulle avec un émoji au-dessus du joueur de celui qui l'envoie */
+  function drawReacts(V, M, list) {
+    const now = performance.now(), r = PR * R.S * 1.08;
+    for (const re of list) {
+      const i = V.c?.[re.slot]; if (i == null || i < 0 || !V.p[i]) continue;
+      const t = (now - re.t0) / 1000; if (t > 2.8) continue;
+      const pop = t < .25 ? 1 - Math.pow(1 - t / .25, 3) * 1 + Math.sin(t / .25 * Math.PI) * .25 : 1;
+      const a = t > 2.2 ? Math.max(0, 1 - (t - 2.2) / .6) : 1;
+      const x = sx(V.p[i][0], V.p[i][1]), y = sy(V.p[i][0], V.p[i][1]) - r * 3.6 - t * r * .5;
+      const rad = Math.max(16, r * 1.5) * pop;
+      ctx.save(); ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.strokeStyle = 'rgba(6,10,8,.6)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - rad * .3, y + rad * .85); ctx.lineTo(x, y + rad * 1.35); ctx.lineTo(x + rad * .3, y + rad * .85); ctx.closePath(); ctx.fill();
+      ctx.font = `${Math.round(rad * 1.25)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(re.e, x, y + rad * .06);
+      ctx.restore();
+    }
   }
   function drawLabel(V, M, [i, x, y, r, ctrl, sl]) {
     const meta = M.players[i], t = meta.t;
@@ -495,6 +514,7 @@ export function createRenderer(canvas) {
     if (k < .1) { ctx.fillStyle = `rgba(255,255,255,${(.1 - k) * 2.2})`; ctx.fillRect(0, 0, R.W, R.H); }
   }
   R.shk = 0; let shkT = 0;
+  R.toScreen = (x, y) => [sx(x, y), sy(x, y)]; // pour poser des éléments HTML au-dessus d'un joueur
   R.draw = (V, M, ui) => {
     R.me = ui.me; R.slot = ui.slot ?? ui.me; // R.me = mon équipe (sens du terrain), R.slot = l'humain que je suis
     const nowT = performance.now(), dtS = Math.min(.1, (nowT - (shkT || nowT)) / 1000); shkT = nowT;
