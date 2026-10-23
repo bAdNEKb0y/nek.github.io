@@ -164,8 +164,16 @@ function render() {
     const n = PK.res.length;
     el.innerHTML = `<div class="pk-stage wide"><div class="pk-count">${esc(PK.title)} · ${PK.duel ? `${n} carte${n > 1 ? 's' : ''}` : `${n} nouvelle${n > 1 ? 's' : ''} carte${n > 1 ? 's' : ''}`}</div>
       <div class="cgrid">${PK.res.slice().reverse().map(c => cardHTML(c)).join('')}</div>
-      <div class="actions">${PK.duel ? '<button class="btn primary" data-a="close">Continuer le duel</button>' : '<button class="btn primary" data-a="team">Mettre dans mon équipe</button><button class="btn" data-a="close">Fermer</button>'}</div></div>`;
-    el.querySelectorAll('[data-a]').forEach(b => b.onclick = e => { e.stopPropagation(); close(b.dataset.a === 'team' ? 'team' : null); });
+      <div class="actions">${PK.duel ? '<button class="btn primary" data-a="close">Continuer le duel</button>' : '<button class="btn primary" data-a="team">Mettre dans mon équipe</button>' + (navigator.share && PK.res.some(c => TRANK[c.tier] >= TRANK.elite) ? '<button class="btn" data-a="share">📤 Montrer à mes potes</button>' : '') + '<button class="btn" data-a="close">Fermer</button>'}</div></div>`;
+    el.querySelectorAll('[data-a]').forEach(b => b.onclick = async e => {
+      e.stopPropagation();
+      if (b.dataset.a === 'share') { // partage de la plus belle carte du pack
+        const best = PK.res[PK.res.length - 1];
+        try { await navigator.share({ title: 'Foot de Poche', text: `🤩 J'ai eu ${best.name} (${TIER_NAME[best.tier]}, ${best.r}) dans un pack sur Foot de Poche ! Viens jouer :`, url: location.origin + location.pathname }); } catch { }
+        return;
+      }
+      close(b.dataset.a === 'team' ? 'team' : null);
+    });
   }
 }
 function close(action) { document.querySelectorAll('.confetti,.pk-flash').forEach(x => x.remove()); const cb = PK?.onClose; $('#pack').hidden = true; $('#pack').innerHTML = ''; PK = null; cb?.(action); }

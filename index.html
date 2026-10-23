@@ -74,7 +74,7 @@
       <div class="col">
         <div class="card">
           <div class="cardhead"><h2>Amis <i class="badge" id="friendsBadge" hidden></i></h2><span class="muted fcount" id="friendsCount"></span><button class="btn small" id="bTrades">🔄 Échanges <i class="badge" id="tradesBadge" hidden></i></button></div>
-          <form class="faddf" id="friendAdd"><input id="friendName" maxlength="16" placeholder="Pseudo de ton ami" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Pseudo de ton ami"><button class="btn small" type="submit">Ajouter</button></form>
+          <form class="faddf" id="friendAdd"><input id="friendName" maxlength="16" placeholder="Pseudo de ton ami" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Pseudo de ton ami"><button class="btn small" type="submit">Ajouter</button><button class="btn small qrbtn" type="button" id="bQR" aria-label="Ajouter avec un QR code">📷 QR</button></form>
           <ul class="friends" id="friends"><li class="muted">Chargement…</li></ul>
         </div>
         <div class="card">
@@ -89,6 +89,9 @@
       </div>
     </div>
   </section>
+
+  <!-- Match partagé par lien (visible sans compte) -->
+  <section id="watch" class="screen" hidden></section>
 
   <!-- Mon équipe -->
   <section id="club" class="screen" hidden>
@@ -235,6 +238,8 @@
   <div id="replay" class="overlay rpov" hidden></div>
   <div id="daily" class="overlay sheet" hidden></div>
   <div id="ach" class="overlay sheet setov profov" hidden></div>
+  <div id="shareov" class="overlay sheet" hidden></div>
+  <div id="qrov" class="overlay sheet" hidden></div>
   <div class="toast" id="toast" role="status"></div>
 </div>
 <script type="module" src="app.js"></script>

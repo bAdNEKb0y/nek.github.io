@@ -12,6 +12,7 @@ import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
 import { initRewards, renderRewardTiles, loadAchievements, openDaily, closeDaily, openAch, closeAch, BONUS_EVERY, achievements } from './rewards.js';
 import { initReactions, showReactBtn, EMOTES, emoteHTML } from './reactions.js';
+import { initShare, shareMatch, closeShare, showWatch, openQR, closeQR, installHTML, bindInstall } from './share.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -19,7 +20,7 @@ const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? 
 const teamIdx = short => Math.max(0, TEAMS.findIndex(t => t.short === short));
 
 /* ---------- Écrans ---------- */
-const SCREENS = ['auth', 'home', 'club', 'shop', 'lobby', 'tlobby', 'pduel', 'game', 'end'];
+const SCREENS = ['auth', 'watch', 'home', 'club', 'shop', 'lobby', 'tlobby', 'pduel', 'game', 'end'];
 /* Clavier iPhone : on cale l'appli sur la partie visible de l'écran (sinon le haut part sous la barre et un grand vide apparaît) */
 (function fitViewport() {
   const vv = window.visualViewport; if (!vv) return;
@@ -119,6 +120,8 @@ async function afterLogin() {
   if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
   else if (!tutoSeen()) openTuto();
   else if (COL?.daily?.ready && SET.dailyPopup) setTimeout(() => { if (!$('#home').hidden && $('#pack').hidden && !GAME && !ROOM) openDaily(); }, 900); // cadeau du jour proposé à l'arrivée
+  let pend = null; try { pend = sessionStorage.getItem('fdp-ami'); sessionStorage.removeItem('fdp-ami'); } catch { }
+  if (pend) setTimeout(() => askFriend(pend), 1200); // QR code / lien d'ami ouvert avant d'être connecté
   const q = new URLSearchParams(location.search).get('salle');
   if (q) { history.replaceState(null, '', location.pathname); joinAny(cleanCode(q)); }
 }
@@ -176,6 +179,20 @@ $('#joinForm').addEventListener('submit', e => {
 });
 /** Code à 4 caractères = salle 1 contre 1, à 5 = salle à plusieurs */
 function joinAny(c) { if (c.length === 5) enterTeamRoom(c, 'guest'); else if (c.length === 4) enterRoom(c, 'guest'); }
+$('#bQR').addEventListener('click', () => { audio(); openQR(ME); });
+$('#shareov').addEventListener('click', e => { if (e.target.id === 'shareov') closeShare(); });
+/** Demande d'ami venue d'un QR code ou d'un lien */
+function askFriend(name) {
+  if (!ME || !name) return;
+  if (name.toLowerCase() === String(ME.username || ME.display).toLowerCase()) { toast('C\'est ton propre QR code 🙂'); return; }
+  document.querySelector('.invite.qr')?.remove();
+  const d = document.createElement('div'); d.className = 'invite qr'; d.setAttribute('role', 'alertdialog');
+  d.innerHTML = `<span class="ib">👋</span><div><b>Ajouter ${esc(name)} en ami ?</b><small>Via son QR code</small></div><button class="btn small primary" data-i="go">Ajouter</button><button class="btn small" data-i="no">Non</button>`;
+  $('#app').appendChild(d);
+  d.querySelector('[data-i=go]').onclick = async () => { d.remove(); await addFriend(name); };
+  d.querySelector('[data-i=no]').onclick = () => d.remove();
+}
+initShare({ toast, onFriendCode: askFriend });
 $('#bDaily').addEventListener('click', () => { audio(); openDaily(); });
 $('#bAch').addEventListener('click', () => { audio(); openAch(); });
 $('#daily').addEventListener('click', e => { if (e.target.id === 'daily') closeDaily(); });
@@ -237,6 +254,7 @@ function renderSettings() {
       ? `<div class="setrange"><input type="range" min="0" max="100" step="5" value="${SET[k]}" data-k="${k}" aria-label="${lab}"><b>${SET[k] === 0 ? 'Coupé' : SET[k] + ' %'}</b></div>`
       : `<div class="chips">${opt.map(([v, t]) => `<button class="chip" data-k="${k}" data-v='${JSON.stringify(v)}' aria-pressed="${SET[k] === v}">${t}</button>`).join('')}</div>`}</div>`).join('')}</section>`).join('')}
     <section class="setsec"><h3>Notifications</h3><div id="pushRow" class="pushrow"><span class="muted">…</span></div></section>
+    <div class="setsec setinst">${installHTML()}</div>
     <section class="setsec"><h3>Autres</h3><div class="setbtns"><button class="btn" data-x="tuto">Revoir le tuto</button><button class="btn" data-x="reset">Remettre par défaut</button></div>
     <p class="hint">Les paramètres sont gardés sur cet appareil.</p></section></div>`;
   el.querySelectorAll('.chip[data-k]').forEach(b => b.onclick = () => { SET[b.dataset.k] = JSON.parse(b.dataset.v); renderSettings(); el.querySelector(`[data-k="${b.dataset.k}"][aria-pressed="true"]`)?.focus({ preventScroll: true }); });
@@ -244,7 +262,7 @@ function renderSettings() {
   el.querySelector('[data-x=close]').onclick = closeSettings;
   el.querySelector('[data-x=reset]').onclick = () => { resetSettings(); renderSettings(); toast('Paramètres remis par défaut.'); };
   el.querySelector('[data-x=tuto]').onclick = () => { closeSettings(); openTuto(); };
-  renderPushRow();
+  renderPushRow(); bindInstall(el);
 }
 async function renderPushRow() {
   const el = $('#pushRow'); if (!el) return;
@@ -837,6 +855,8 @@ function closeTop() {
   if (!$('#profile').hidden) { closeProfile(); return true; }
   if (!$('#settings').hidden) { closeSettings(); return true; }
   if (!$('#ach').hidden) { closeAch(); return true; }
+  if (!$('#shareov').hidden) { closeShare(); return true; }
+  if (!$('#qrov').hidden) { closeQR(); return true; }
   if (!$('#daily').hidden) { closeDaily(); return true; }
   if (!$('#menu').hidden) { $('#menu').hidden = true; return true; }
   for (const id of ['tuto', 'pack', 'picker']) {
@@ -1120,12 +1140,17 @@ function renderEnd(g, sum, rating) {
     const title = `${M.team[0].short} ${sc[0]}–${sc[1]} ${M.team[1].short}${g.online ? '' : ' (ordi)'}`.slice(0, 80);
     const meta = { team: M.team.map(t => ({ name: t.name, short: t.short, h: t.h, c1: t.c1, c2: t.c2 })), kit: M.kit, players: M.players.map(p => ({ t: p.t, i: p.i, gk: p.gk, num: p.num, name: p.name })), names: g.names, dur: M.dur, score: sc };
     mk('▶ Revoir le match', '', async () => openReplay({ data: await encode(rec.data()), meta, title }));
+    let saved = null;
+    const save = async () => { if (saved) return saved; const r = await saveReplay(rec, meta, title); if (r) { saved = r; sv.textContent = '✓ Replay sauvegardé'; sv.disabled = true; } return r; };
     const sv = mk('💾 Sauvegarder le replay', '', async () => {
       sv.disabled = true; sv.textContent = 'Sauvegarde…';
-      const r = await saveReplay(rec, meta, title);
+      const r = await save();
       if (!r) { sv.disabled = false; sv.textContent = '💾 Sauvegarder le replay'; return; }
-      sv.textContent = '✓ Replay sauvegardé';
-      if (friendsList().length) { const sh = mk('📤 Envoyer à un ami', '', () => shareReplayPicker(r.id, title, sh)); }
+      if (friendsList().length && !acts.querySelector('[data-fr]')) { const sh = mk('💬 Envoyer à un ami', '', () => shareReplayPicker(r.id, title, sh)); sh.dataset.fr = 1; }
+    });
+    const pub = mk('📤 Partager le match', '', async () => {
+      pub.disabled = true; const r = await save(); pub.disabled = false;
+      if (r) shareMatch(r.id, title);
     });
   }
 }
@@ -1133,6 +1158,14 @@ function renderEnd(g, sum, rating) {
 /* ---------- Démarrage ---------- */
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
+  const qs = new URLSearchParams(location.search), match = qs.get('match'), ami = qs.get('ami');
+  if (ami) { try { sessionStorage.setItem('fdp-ami', ami.slice(0, 20)); } catch { } }
+  if (match && /^[0-9a-f-]{36}$/i.test(match)) { // lien d'un match partagé : visible sans compte
+    show('watch');
+    showWatch(match, { loggedIn: !!session, onPlay: async () => { history.replaceState(null, '', location.pathname); if (session) await afterLogin(); else show('auth'); } });
+    return;
+  }
+  if (ami) history.replaceState(null, '', location.pathname);
   if (session) await afterLogin(); else show('auth');
   sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT') { ME = null; show('auth'); } });
 })();

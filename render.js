@@ -163,6 +163,7 @@ export function createRenderer(canvas) {
   function drawPlayer(V, M, i) {
     const pd = V.p[i], meta = M.players[i], t = meta.t;
     const x = sx(pd[0], pd[1]), y = sy(pd[0], pd[1]), r = PR * R.S * 1.08, kit = M.kit[t];
+    if (!Number.isFinite(x + y + r) || !kit) return; // donnée abîmée (vieux replay) : on n'affiche pas ce joueur
     const [fx, fy] = sdir(pd[2], pd[3]);
     const sl = V.c.indexOf(i), ctrl = sl >= 0 && !!M.humans[sl], mine = sl === R.slot;
     // animation de course (phase selon la distance parcourue à l'écran)

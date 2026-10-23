@@ -5,7 +5,8 @@ import { $, esc, shirtSVG, cardHTML } from './ui.js';
 import { openReplay, encode } from './replay.js';
 import { sendPush, enablePush } from './push.js';
 import { sentence } from './chatdata.js';
-import { SET } from './settings.js'; // anciennes phrases construites (affichage seulement)
+import { SET } from './settings.js';
+import { shareMatch } from './share.js'; // anciennes phrases construites (affichage seulement)
 
 let H = null, ME = null, CH = null;
 export const TITLES = ['Buteur né', 'Le Mur', 'Roi du dribble', 'Maître des packs', 'Chasseur de légendes', 'Capitaine', 'Pro de la retournée', 'Tacleur fou', 'Passeur de génie', 'Futur Ballon d\'Or', 'Supporter n°1', 'Débutant motivé'];
@@ -496,11 +497,12 @@ async function renderProfReplays(p) {
   const list = await listReplays(p.id), el = $('#profRp'); if (!el || PROF?.id !== p.id) return;
   const mine = p.id === ME.id, friends = FRIENDS.filter(f => f.status === 'accepted');
   el.innerHTML = list.map(r => `<li class="rprow"><button class="rpplay" data-rp="${r.id}">▶</button><span class="rpt"><b>${esc(r.title)}</b><small>${new Date(r.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></span>
-    ${mine ? `${friends.length ? `<button class="btn small" data-share="${r.id}" data-t="${esc(r.title)}">📤</button>` : ''}<button class="btn small" data-del="${r.id}" aria-label="Supprimer">🗑</button>` : ''}</li>`).join('')
+    ${mine ? `<button class="btn small" data-pub="${r.id}" data-t="${esc(r.title)}" aria-label="Partager le lien du match">🔗</button>${friends.length ? `<button class="btn small" data-share="${r.id}" data-t="${esc(r.title)}" aria-label="Envoyer à un ami">💬</button>` : ''}<button class="btn small" data-del="${r.id}" aria-label="Supprimer">🗑</button>` : ''}</li>`).join('')
     || `<li class="muted">${mine ? 'Aucun replay. À la fin d\'un match, touche « 💾 Sauvegarder le replay ».' : 'Aucun replay partagé.'}</li>`;
   el.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => playReplay(b.dataset.rp));
   el.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { b.disabled = true; await sb.rpc('remove_replay', { p_id: b.dataset.del }); renderProfReplays(p); });
   el.querySelectorAll('[data-share]').forEach(b => b.onclick = () => shareReplayPicker(b.dataset.share, b.dataset.t, b.closest('li')));
+  el.querySelectorAll('[data-pub]').forEach(b => b.onclick = () => shareMatch(b.dataset.pub, b.dataset.t));
 }
 /** Petite liste d'amis sous un replay pour l'envoyer */
 export function shareReplayPicker(id, title, anchor) {

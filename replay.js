@@ -78,7 +78,8 @@ function bind(el, goals) {
   el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { RP.t = Math.max(0, +b.dataset.g - 4 * HZ); RP.play = true; el.querySelector('[data-r=play]').textContent = '❚❚'; });
 }
 function frameAt(t) {
-  const { F, n } = RP, i = Math.min(n - 2, Math.floor(t)), k = Math.min(1, t - i), A = i * STRIDE, B = (i + 1) * STRIDE;
+  t = Math.max(0, Math.min(t, RP.n - 1));
+  const { F, n } = RP, i = Math.max(0, Math.min(n - 2, Math.floor(t))), k = Math.max(0, Math.min(1, t - i)), A = i * STRIDE, B = (i + 1) * STRIDE;
   const L = (a, b) => (F[A + a] + (F[B + a] - F[A + a]) * k) / Q;
   const p = [];
   for (let j = 0; j < NP; j++) {
@@ -94,7 +95,7 @@ function frameAt(t) {
 }
 function loop(now) {
   if (!RP) return;
-  const dt = Math.min(.1, (now - RP.last) / 1000); RP.last = now;
+  const dt = Math.max(0, Math.min(.1, (now - RP.last) / 1000)); RP.last = now; // jamais de temps négatif (1re image)
   if (RP.play && !RP.drag) RP.t = Math.min(RP.n - 1, RP.t + dt * HZ * RP.speed);
   if (RP.t >= RP.n - 1 && RP.play) { RP.play = false; const b = RP.el.querySelector('[data-r=play]'); if (b) b.textContent = '▶'; }
   const V = frameAt(RP.t);
