@@ -699,6 +699,7 @@ function frame(now) {
         g.lastEv = s; playEvent(type, val);
         if (type === 'goal') { g.parts.push(...R.goalBurst(val, g.M)); startReplay(g, now); }
         if (type === 'bicycle' || type === 'volley') g.parts.push(...R.burstAt(g.V, g.M));
+        if (type === 'kick' && val >= 1.1) g.parts.push(...R.grassAt(g.V));
       }
     }
     for (const q of g.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 300 * dt; q.rot += dt * 6; q.life -= dt; }

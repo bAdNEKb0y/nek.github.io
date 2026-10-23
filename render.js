@@ -1,6 +1,5 @@
 /* Rendu du match en paysage. Chaque joueur voit son équipe attaquer vers la droite. */
 import { FW, FL, GH, GD, PR, BR, CX } from './engine.js';
-import { lookFor } from './ui.js';
 
 const FD = "'Saira Extra Condensed','Arial Narrow',Impact,sans-serif";
 const CHALK = '#eef3ea';
@@ -160,114 +159,80 @@ export function createRenderer(canvas) {
 
   function drawPlayer(V, M, i) {
     const pd = V.p[i], meta = M.players[i], t = meta.t;
-    const x = sx(pd[0], pd[1]), y = sy(pd[0], pd[1]), r = PR * R.S * 1.22, kit = M.kit[t];
+    const x = sx(pd[0], pd[1]), y = sy(pd[0], pd[1]), r = PR * R.S * 1.08, kit = M.kit[t];
     const [fx, fy] = sdir(pd[2], pd[3]);
-    const look = meta.look || (meta.look = lookFor(meta.name));
     const ctrl = V.c[t] === i && M.humans[t];
     // animation de course (phase selon la distance parcourue à l'écran)
     const an = ANIM[i] || (ANIM[i] = { x, y, ph: 0, sp: 0 });
     const mv = Math.hypot(x - an.x, y - an.y); an.x = x; an.y = y;
-    an.sp += (Math.min(mv / Math.max(1, r * .28), 1) - an.sp) * .22; an.ph += mv / Math.max(1, r * .75);
+    an.sp += (Math.min(mv / Math.max(1, r * .35), 1) - an.sp) * .25; an.ph += mv / Math.max(1, r * .9);
     const ang = Math.atan2(fy, fx);
-    // ombres des projecteurs (deux ombres douces comme dans un stade)
-    ctx.fillStyle = 'rgba(0,0,0,.2)';
-    ctx.beginPath(); ctx.ellipse(x + r * .55, y + r * .62, r * 1.05, r * .62, .5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,.11)';
-    ctx.beginPath(); ctx.ellipse(x - r * .5, y + r * .55, r * .95, r * .55, -.5, 0, Math.PI * 2); ctx.fill();
-    // marqueur du joueur contrôlé : anneau au sol + flèche
+    // ombre douce
+    ctx.fillStyle = 'rgba(0,0,0,.26)'; ctx.beginPath(); ctx.ellipse(x + r * .3, y + r * .42, r * 1.08, r * .82, 0, 0, Math.PI * 2); ctx.fill();
+    // joueur contrôlé : anneau au sol qui pulse
     if (ctrl) {
-      const c = SIDE_COL[t], pulse = 1 + Math.sin(performance.now() / 160) * .06;
-      ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = Math.max(2, R.S * .38); ctx.globalAlpha = .95;
-      ctx.beginPath(); ctx.ellipse(x, y + r * .15, r * 1.75 * pulse, r * 1.35 * pulse, 0, 0, Math.PI * 2); ctx.stroke();
-      ctx.globalAlpha = .18; ctx.fillStyle = c; ctx.fill(); ctx.restore();
+      const c = SIDE_COL[t], pulse = 1 + Math.sin(performance.now() / 160) * .05;
+      ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = Math.max(2, R.S * .4);
+      ctx.beginPath(); ctx.arc(x, y, r * 1.62 * pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = .16; ctx.fillStyle = c; ctx.fill(); ctx.restore();
     }
     if (V.pv[t] === i && t === R.me) {
       ctx.save(); ctx.setLineDash([R.S * .8, R.S * .6]); ctx.strokeStyle = SIDE_COL[t]; ctx.lineWidth = Math.max(1.5, R.S * .3);
-      ctx.beginPath(); ctx.ellipse(x, y + r * .15, r * 1.65, r * 1.3, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.arc(x, y, r * 1.58, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
     const gk = meta.gk, body = gk ? GK_COL[t] : kit.c1, trim = gk ? '#0b1411' : kit.c2;
     const patt = !gk && kit.p !== 'solid';
-    const sock = gk ? GK_COL[t] : (kit.p === 'solid' ? kit.c2 : kit.c1);
     const flip = pd[5] || 0;
-    if (flip > 0) { // retournée : cercles de mouvement et corps qui bascule
+    if (flip > 0) { // retournée : cercles de mouvement et jeton qui bascule
       ctx.save(); ctx.strokeStyle = 'rgba(255,224,138,.8)'; ctx.lineWidth = Math.max(2, r * .25);
       for (let k = 0; k < 3; k++) { ctx.globalAlpha = flip * (1 - k * .3); ctx.beginPath(); ctx.arc(x, y, r * (1.5 + k * .45 + (.7 - flip)), 0, Math.PI * 2); ctx.stroke(); }
       ctx.restore();
       ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(Math.max(.15, Math.cos((.7 - flip) / .7 * Math.PI * 2) * .5 + .5), 1); ctx.rotate(-ang); ctx.translate(-x, -y);
     }
     ctx.globalAlpha = pd[4] ? .6 : 1;
-    const ol = 'rgba(8,12,10,.55)', olw = Math.max(1, r * .1);
+    // crampons qui dépassent pendant la course
     ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
-    const sw = Math.sin(an.ph) * r * .62 * an.sp;
-    ctx.lineCap = 'round';
-    // jambes (chaussettes) + crampons
-    for (const s of [-1, 1]) {
-      const fxp = sw * s, fyp = s * r * .36;
-      ctx.strokeStyle = ol; ctx.lineWidth = r * .36 + olw * 2;
-      ctx.beginPath(); ctx.moveTo(-r * .05, s * r * .3); ctx.lineTo(fxp, fyp); ctx.stroke();
-      ctx.strokeStyle = sock; ctx.lineWidth = r * .36;
-      ctx.beginPath(); ctx.moveTo(-r * .05, s * r * .3); ctx.lineTo(fxp, fyp); ctx.stroke();
-      ctx.fillStyle = look.boot; ctx.strokeStyle = ol; ctx.lineWidth = olw;
-      ctx.beginPath(); ctx.ellipse(fxp + r * .14, fyp, r * .26, r * .15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    }
-    // bras : se balancent à l'opposé des jambes
-    for (const s of [-1, 1]) {
-      const hx = -sw * s * .7, hy = s * r * 1.12;
-      ctx.strokeStyle = ol; ctx.lineWidth = r * .3 + olw * 2;
-      ctx.beginPath(); ctx.moveTo(0, s * r * .82); ctx.lineTo(hx, hy); ctx.stroke();
-      ctx.strokeStyle = look.skin; ctx.lineWidth = r * .3;
-      ctx.beginPath(); ctx.moveTo(0, s * r * .82); ctx.lineTo(hx, hy); ctx.stroke();
-      ctx.strokeStyle = kit.p === 'sleeves' && !gk ? kit.c2 : body; ctx.lineWidth = r * .36;
-      ctx.beginPath(); ctx.moveTo(0, s * r * .78); ctx.lineTo(hx * .45, s * r * .96); ctx.stroke();
-      ctx.fillStyle = gk ? '#f4f4f4' : look.skin; ctx.beginPath(); ctx.arc(hx, hy, r * (gk ? .19 : .15), 0, Math.PI * 2); ctx.fill();
-    }
-    // torse (maillot vu de dessus) avec motif et volume
-    ctx.beginPath(); ctx.ellipse(-r * .04, 0, r * .56, r * .98, 0, 0, Math.PI * 2);
-    ctx.fillStyle = body; ctx.fill(); ctx.save(); ctx.clip();
+    const sw = Math.sin(an.ph) * r * .5 * an.sp;
+    ctx.fillStyle = '#101312';
+    ctx.beginPath(); ctx.ellipse(r * .42 + sw, -r * .44, r * .27, r * .2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(r * .42 - sw, r * .44, r * .27, r * .2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // jeton : maillot + motif
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = body; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
     if (patt) {
       ctx.fillStyle = kit.c2;
-      if (kit.p === 'stripes') for (const k of [-.62, 0, .62]) ctx.fillRect(-r, k * r - r * .14, 2 * r, r * .28);
-      else if (kit.p === 'band') { ctx.fillStyle = '#fff'; ctx.fillRect(-r, -r * .3, 2 * r, r * .6); ctx.fillStyle = kit.c2; ctx.fillRect(-r, -r * .22, 2 * r, r * .44); }
-      else if (kit.p === 'diag') { ctx.beginPath(); ctx.moveTo(-r, r); ctx.lineTo(r, -r); ctx.lineTo(r, r); ctx.closePath(); ctx.fill(); }
-      else if (kit.p === 'sleeves') { ctx.fillRect(-r, -r, 2 * r, r * .32); ctx.fillRect(-r, r * .68, 2 * r, r * .32); }
+      if (kit.p === 'stripes') for (const k of [-.66, 0, .66]) ctx.fillRect(x + k * r - r * .17, y - r, r * .34, 2 * r);
+      else if (kit.p === 'band') { ctx.fillStyle = '#fff'; ctx.fillRect(x - r * .38, y - r, r * .76, 2 * r); ctx.fillStyle = kit.c2; ctx.fillRect(x - r * .3, y - r, r * .6, 2 * r); }
+      else if (kit.p === 'diag') { ctx.beginPath(); ctx.moveTo(x - r, y + r); ctx.lineTo(x + r, y - r); ctx.lineTo(x + r, y + r); ctx.closePath(); ctx.fill(); }
+      else if (kit.p === 'sleeves') { ctx.fillRect(x - r, y - r, r * .42, 2 * r); ctx.fillRect(x + r * .58, y - r, r * .42, 2 * r); }
     }
-    const lg = ctx.createLinearGradient(0, -r, 0, r);
-    lg.addColorStop(0, 'rgba(255,255,255,.22)'); lg.addColorStop(.5, 'rgba(255,255,255,0)'); lg.addColorStop(1, 'rgba(0,0,0,.28)');
-    ctx.fillStyle = lg; ctx.fillRect(-r, -r, 2 * r, 2 * r);
-    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(-r, -r, r * .5, 2 * r); // dos ombré
+    // relief : éclat en haut à gauche, ombre en bas à droite (effet bouton bombé)
+    const sh = ctx.createRadialGradient(x - r * .38, y - r * .42, r * .05, x, y, r * 1.08);
+    sh.addColorStop(0, 'rgba(255,255,255,.42)'); sh.addColorStop(.35, 'rgba(255,255,255,.08)'); sh.addColorStop(.7, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.32)');
+    ctx.fillStyle = sh; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
     ctx.restore();
-    ctx.strokeStyle = ol; ctx.lineWidth = olw; ctx.stroke();
-    // col
-    ctx.strokeStyle = gk ? '#0b1411' : (kit.p === 'solid' ? trim : '#fff'); ctx.lineWidth = Math.max(1, r * .1);
-    ctx.beginPath(); ctx.arc(r * .06, 0, r * .5, -1.1, 1.1); ctx.stroke();
-    // tête : oreilles, visage, cheveux selon le joueur
-    ctx.fillStyle = look.skin;
-    ctx.beginPath(); ctx.arc(r * .04, -r * .44, r * .11, 0, Math.PI * 2); ctx.arc(r * .04, r * .44, r * .11, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(r * .08, 0, r * .42, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = ol; ctx.lineWidth = olw; ctx.stroke();
-    if (look.hair) {
-      const st = look.style; ctx.fillStyle = look.hair;
-      if (st === 4) { ctx.globalAlpha *= .55; ctx.beginPath(); ctx.arc(r * .02, 0, r * .38, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = pd[4] ? .6 : 1; }
-      else if (st === 10 || st === 2) { // afro / boucles
-        const R0 = st === 10 ? .56 : .46; ctx.beginPath(); ctx.arc(-r * .04, 0, r * R0, 0, Math.PI * 2); ctx.fill();
-        for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; ctx.beginPath(); ctx.arc(-r * .04 + Math.cos(a) * r * R0 * .85, Math.sin(a) * r * R0 * .85, r * .16, 0, Math.PI * 2); ctx.fill(); }
-        ctx.fillStyle = look.skin; ctx.beginPath(); ctx.ellipse(r * .36, 0, r * .12, r * .2, 0, 0, Math.PI * 2); ctx.fill();
-      } else {
-        ctx.beginPath(); ctx.ellipse(-r * .06, 0, r * .4, r * .41, 0, 0, Math.PI * 2); ctx.fill();
-        if (st === 3) { ctx.beginPath(); ctx.ellipse(-r * .38, 0, r * .2, r * .3, 0, 0, Math.PI * 2); ctx.fill(); }
-        if (st === 7) { ctx.beginPath(); ctx.arc(-r * .44, 0, r * .15, 0, Math.PI * 2); ctx.fill(); }
-        if (st === 5 || st === 6) { ctx.beginPath(); ctx.ellipse(r * .2, 0, r * .16, r * .24, 0, 0, Math.PI * 2); ctx.fill(); }
-        if (st === 8) { ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = Math.max(.8, r * .06); for (const k of [-.2, 0, .2]) { ctx.beginPath(); ctx.moveTo(r * .2, k * r); ctx.lineTo(-r * .4, k * r * 1.3); ctx.stroke(); } }
-      }
-      ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(-r * .02, -r * .14, r * .16, r * .09, 0, 0, Math.PI * 2); ctx.fill();
-    } else { ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.beginPath(); ctx.ellipse(r * .02, -r * .14, r * .16, r * .1, 0, 0, Math.PI * 2); ctx.fill(); }
-    ctx.restore();
+    // double liseré : couleur secondaire puis contour sombre
+    ctx.lineWidth = Math.max(1.4, r * .16); ctx.strokeStyle = patt || gk ? 'rgba(255,255,255,.75)' : trim;
+    ctx.beginPath(); ctx.arc(x, y, r * .9, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = Math.max(1, r * .1); ctx.strokeStyle = 'rgba(6,10,8,.7)';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+    // chevron de direction sur le bord
+    const cx1 = x + fx * r * 1.08, cy1 = y + fy * r * 1.08;
+    ctx.fillStyle = gk ? '#0b1411' : (patt ? '#fff' : trim); ctx.strokeStyle = 'rgba(6,10,8,.7)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + fx * r * 1.5, y + fy * r * 1.5); ctx.lineTo(cx1 - fy * r * .4, cy1 + fx * r * .4); ctx.lineTo(cx1 + fy * r * .4, cy1 - fx * r * .4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // numéro bien lisible
+    const fz = Math.max(9, r * 1.02), txt = pickText(body);
+    ctx.font = `800 ${fz}px ${FD}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    const light = patt ? '#fff' : txt, edge = light === '#ffffff' || light === '#fff' ? 'rgba(6,10,8,.85)' : 'rgba(255,255,255,.75)';
+    ctx.lineWidth = Math.max(2, fz * .22); ctx.strokeStyle = edge; ctx.strokeText(meta.num, x, y + r * .07);
+    ctx.fillStyle = light; ctx.fillText(meta.num, x, y + r * .07);
     if (flip > 0) ctx.restore();
     ctx.globalAlpha = 1;
-    if (ctrl) { // flèche FIFA au-dessus du joueur
-      const c = SIDE_COL[t], ay = y - r * 2.15 + Math.sin(performance.now() / 180) * r * .12;
+    if (ctrl) { // flèche au-dessus du joueur contrôlé
+      const c = SIDE_COL[t], ay = y - r * 2.05 + Math.sin(performance.now() / 180) * r * .12;
       ctx.fillStyle = c; ctx.strokeStyle = 'rgba(8,12,10,.7)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(x - r * .55, ay - r * .55); ctx.lineTo(x + r * .55, ay - r * .55); ctx.lineTo(x, ay + r * .1); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - r * .5, ay - r * .5); ctx.lineTo(x + r * .5, ay - r * .5); ctx.lineTo(x, ay + r * .1); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
     if (ctrl || V.b[3] === i) LABELS.push([i, x, y, r, ctrl]);
   }
@@ -443,27 +408,6 @@ export function createRenderer(canvas) {
     ctx.fillText('Touche l\'écran pour passer', R.W / 2, R.H - bh / 2);
     ctx.globalAlpha = 1;
   }
-  /** Radar façon FIFA : tout le terrain en miniature (quand la caméra suit le ballon) */
-  function drawRadar(V, M) {
-    const w = clamp(R.W * .15, 100, 180), h = w * FW / FL, x0 = (R.W - w) / 2, y0 = R.H - h - 10;
-    ctx.fillStyle = 'rgba(6,14,10,.72)'; rr(x0 - 4, y0 - 4, w + 8, h + 8, 6); ctx.fill();
-    ctx.strokeStyle = 'rgba(238,243,234,.45)'; ctx.lineWidth = 1;
-    ctx.strokeRect(x0, y0, w, h); ctx.beginPath(); ctx.moveTo(x0 + w / 2, y0); ctx.lineTo(x0 + w / 2, y0 + h); ctx.stroke();
-    ctx.beginPath(); ctx.arc(x0 + w / 2, y0 + h / 2, h * .14, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeRect(x0, y0 + h * (1 - 36 / FW) / 2, w * .14, h * 36 / FW); ctx.strokeRect(x0 + w * .86, y0 + h * (1 - 36 / FW) / 2, w * .14, h * 36 / FW);
-    // zone visible à l'écran
-    const vt = clamp((R.hud - R.OY) / (FW * R.S), 0, 1), vb = clamp((R.H - R.OY) / (FW * R.S), 0, 1);
-    ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x0, y0 + vt * h, w, (vb - vt) * h);
-    const P = (wx, wy) => R.me === 0 ? [x0 + (FL - wy) / FL * w, y0 + wx / FW * h] : [x0 + wy / FL * w, y0 + (FW - wx) / FW * h];
-    V.p.forEach((pd, i) => {
-      const m = M.players[i], [px, py] = P(pd[0], pd[1]), c = V.c[m.t] === i && M.humans[m.t];
-      ctx.fillStyle = m.gk ? GK_COL[m.t] : SIDE_COL[m.t];
-      ctx.beginPath(); ctx.arc(px, py, c ? 4 : 2.8, 0, Math.PI * 2); ctx.fill();
-      if (c) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
-    });
-    const [bx, by] = P(V.b[0], V.b[1]);
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0b1411'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bx, by, 2.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }
   function drawBtn(x, y, r, label, on, col, charge) {
     ctx.fillStyle = on ? col : 'rgba(6,12,10,.35)'; ctx.strokeStyle = col; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -479,17 +423,19 @@ export function createRenderer(canvas) {
     const [, text, sub, t, life, team] = B;
     const k = t < .25 ? t / .25 : t > life - .3 ? Math.max(0, (life - t) / .3) : 1;
     const big = text === 'BUT !';
-    const cx = R.OX + FL * R.S / 2, cy = R.OY + FW * R.S / 2;
+    const cx = R.W / 2, cy = R.hud + (R.H - R.hud) * .42; // centré sur ce qu'on voit
     ctx.save(); ctx.globalAlpha = k;
-    const fs = Math.min(FW * R.S * (big ? .5 : .22), big ? 150 : 64);
-    const bandH = fs * (sub ? 1.5 : 1.15);
+    const vh = R.H - R.hud, fs = Math.min(vh * (big ? .2 : .1), R.W * (big ? .11 : .06), big ? 110 : 52);
+    const bandH = fs * (sub ? 1.6 : 1.2);
     ctx.fillStyle = big && team >= 0 ? M.kit[team].c1 : 'rgba(8,14,12,.84)';
-    ctx.fillRect(R.OX - 4 * R.S, cy - bandH / 2, FL * R.S + 8 * R.S, bandH);
+    ctx.fillRect(0, cy - bandH / 2, R.W, bandH);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, cy + bandH / 2 - 3, R.W, 3);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(0, cy - bandH / 2, R.W, 2);
     ctx.fillStyle = big && team >= 0 ? pickText(M.kit[team].c1) : CHALK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `800 ${fs}px ${FD}`;
     const sc = t < .25 && big ? 1 + (1 - t / .25) * .4 : 1;
     ctx.save(); ctx.translate(cx, cy + (sub ? -fs * .2 : fs * .04)); ctx.scale(sc, sc); ctx.fillText(text, 0, 0); ctx.restore();
-    if (sub) { ctx.font = `600 ${Math.max(13, fs * .26)}px ${FD}`; ctx.globalAlpha = k * .85; ctx.fillText(sub.toUpperCase(), cx, cy + fs * .48); }
+    if (sub) { ctx.font = `600 ${Math.max(13, fs * .3)}px ${FD}`; ctx.globalAlpha = k * .85; ctx.fillText(sub.toUpperCase(), cx, cy + fs * .5); }
     ctx.restore();
   }
 
@@ -501,6 +447,21 @@ export function createRenderer(canvas) {
     const lo = R.H - (FW + 3) * R.S, hi = R.hud + 3 * R.S;
     R.OY = clamp(want, lo, hi);
   }
+  /** Filet qui se gonfle quand le ballon y rentre */
+  function drawNet() {
+    const N = R.net; if (!N) return;
+    const k = (performance.now() - N.t) / 1100; if (k > 1) { R.net = null; return; }
+    const bulge = Math.sin(Math.min(1, k * 2.2) * Math.PI) * (1 - k) * GD * R.S * .9 + (1 - k) * GD * R.S * .25;
+    const ex = N.side ? R.OX + FL * R.S : R.OX, dir = N.side ? 1 : -1, my = R.OY + CX * R.S, gh = GH * R.S;
+    ctx.save(); ctx.globalAlpha = .75 * (1 - k); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1, R.S * .18);
+    for (let j = -3; j <= 3; j++) {
+      const yy = my + j / 3 * gh * .92, depth = GD * R.S + bulge * (1 - (j / 3) ** 2);
+      ctx.beginPath(); ctx.moveTo(ex, yy); ctx.quadraticCurveTo(ex + dir * depth * 1.15, yy, ex + dir * depth, yy + (j ? 0 : .1)); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(ex + dir * GD * R.S, my - gh);
+    ctx.quadraticCurveTo(ex + dir * (GD * R.S + bulge * 1.6), my, ex + dir * GD * R.S, my + gh); ctx.stroke();
+    ctx.restore();
+  }
   R.shk = 0; let shkT = 0;
   R.draw = (V, M, ui) => {
     R.me = ui.me;
@@ -510,6 +471,7 @@ export function createRenderer(canvas) {
     ctx.setTransform(R.DPR, 0, 0, R.DPR, 0, 0);
     if (!V || !R.ctrl) { ctx.fillStyle = '#0b1411'; ctx.fillRect(0, 0, R.W, R.H); return; }
     drawPitch();
+    drawNet();
     const order = V.p.map((p, i) => i).sort((a, b) => sy(V.p[a][0], V.p[a][1]) - sy(V.p[b][0], V.p[b][1]));
     drawLanding(V);
     LABELS.length = 0;
@@ -519,7 +481,6 @@ export function createRenderer(canvas) {
     for (const q of ui.parts || []) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.globalAlpha = Math.min(1, q.life); ctx.fillStyle = q.c; ctx.fillRect(-q.r, -q.r / 2, q.r * 2, q.r); ctx.restore(); }
     drawBanner(V, M);
     if (ui.replay) drawReplay(V);
-    else if (R.follow) drawRadar(V, M);
     drawHUD(V, M, ui);
     if (!ui.replay) drawControls(V, M, ui);
     if (ui.overlay) {
@@ -533,8 +494,13 @@ export function createRenderer(canvas) {
     for (let i = 0; i < 36; i++) out.push({ x, y, vx: (Math.random() * 2 - 1) * 260, vy: (Math.random() * 2 - 1) * 200 - 60, c: i % 3 ? '#ffe08a' : '#ffffff', life: .6 + Math.random() * .6, r: 1.5 + Math.random() * 2, rot: Math.random() * 6 });
     return out;
   };
+  R.grassAt = V => {
+    const x = sx(V.b[0], V.b[1]), y = sy(V.b[0], V.b[1]), out = [], cols = ['#3f9d5f', '#2e7d4a', '#6cc47f', '#d9cfa3'];
+    for (let i = 0; i < 14; i++) out.push({ x, y, vx: (Math.random() * 2 - 1) * 120, vy: -40 - Math.random() * 120, c: cols[i % 4], life: .35 + Math.random() * .3, r: 1 + Math.random() * 1.4, rot: Math.random() * 6 });
+    return out;
+  };
   R.goalBurst = (team, M) => {
-    R.shk = .45;
+    R.shk = .45; R.net = { side: team === R.me ? 1 : 0, t: performance.now() };
     const left = (team === R.me) ? false : true; // on marque à droite
     const gx = left ? R.OX : R.OX + FL * R.S, gy = R.OY + CX * R.S, out = [];
     for (let i = 0; i < 70; i++) out.push({ x: gx, y: gy + (Math.random() * 2 - 1) * GH * R.S, vx: (Math.random() * 2 - 1) * 220, vy: (Math.random() * 2 - 1) * 160, c: Math.random() < .5 ? M.kit[team].c1 : M.kit[team].c2, life: 1 + Math.random(), r: 2 + Math.random() * 2, rot: Math.random() * 6 });
