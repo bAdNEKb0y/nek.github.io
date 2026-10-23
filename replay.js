@@ -1,7 +1,7 @@
 /* Replays de match : enregistrement compact (10 images/s), sauvegarde, lecture avec pause, vitesse et barre de temps */
 import { createRenderer } from './render.js';
 import { $, esc } from './ui.js';
-import { FL } from './engine.js';
+import { FL, CX, GH } from './engine.js';
 import { audio, S as SND, crowdStart, crowdStop, crowdLevel, soundOn, setSound } from './sound.js';
 import { SET } from './settings.js';
 
@@ -117,7 +117,19 @@ export function findEvents(F, n, M) {
       ev.push({ k, type: 'goal', team: t, who: sc >= 0 ? name(sc) : '' });
     }
     // frappe / passe : le porteur lâche le ballon qui part vite
-    if (pc >= 0 && c < 0) { const v = bsp(k + 1 < n ? k + 1 : k); if (v > 14) ev.push({ k, type: 'kick', pw: Math.min(1.6, v / 30), j: pc }); }
+    if (pc >= 0 && c < 0) { const v = bsp(k + 1 < n ? k + 1 : k); if (v > 14) {
+      ev.push({ k, type: 'kick', pw: Math.min(1.6, v / 30), j: pc });
+      // tir raté de peu : le ballon file jusqu'à la ligne de but sans but ni arrêt
+      const gy = team(pc) === 0 ? 0 : FL, sc0 = at(F, k, OB + 4) + at(F, k, OB + 5);
+      for (let q = k + 1; q < Math.min(n, k + 16); q++) {
+        if (carr(q) >= 0) break;
+        if (gy === 0 ? at(F, q, OB + 1) / Q < 1.5 : at(F, q, OB + 1) / Q > FL - 1.5) {
+          const dx = Math.abs(at(F, q, OB) / Q - CX), q2 = Math.min(n - 1, q + 12);
+          if (at(F, q2, OB + 4) + at(F, q2, OB + 5) === sc0 && dx < GH / 2 + 6) ev.push({ k: q, type: 'miss', post: Math.abs(dx - GH / 2) < 1.4, j: pc, who: name(pc) });
+          break;
+        }
+      }
+    } }
     // récupération / arrêt du gardien
     if (c >= 0 && c !== pc) {
       const prev = pc >= 0 ? pc : carr(Math.max(0, k - 3));
@@ -146,12 +158,12 @@ function fire(e, V) {
   const nowT = performance.now(), R = RP.R;
   const pos = j => j >= 0 && V.p[j] ? R.toScreen(V.p[j][0], V.p[j][1]) : R.toScreen(V.b[0], V.b[1]);
   if (e.type === 'goal') {
-    SND.goal(); if (SET.vib) try { navigator.vibrate?.([60, 40, 120]); } catch { }
+    SND.goal(); SND.horn(); RP.flash = nowT; if (SET.vib) try { navigator.vibrate?.([60, 40, 120]); } catch { }
     RP.parts.push(...R.goalBurst(e.team, RP.M));
     RP.bn = { text: 'BUT !', sub: e.who, team: e.team, t0: nowT, life: 2.4 };
     RP.fx.push({ kind: 'confetti', t0: nowT });
   } else if (e.type === 'dribble') {
-    SND.dribble();
+    SND.whoosh(); SND.dribble(); if (nowT - (RP.lastDrib || 0) < 9000) SND.ole(); RP.lastDrib = nowT;
     const [x, y] = pos(e.j);
     RP.fx.push({ kind: 'pop', text: e.gk ? 'GARDIEN EFFACÉ !' : ['DRIBBLE !', 'CROCHET !', 'EFFACÉ !', 'QUEL GESTE !'][Math.floor(Math.random() * 4)], sub: e.who, j: e.j, t0: nowT, x, y });
     RP.fx.push({ kind: 'ring', j: e.j, t0: nowT });
@@ -161,6 +173,11 @@ function fire(e, V) {
   } else if (e.type === 'save') {
     SND.save(); const [x, y] = pos(e.j); RP.fx.push({ kind: 'pop', text: 'ARRÊT !', j: e.j, t0: nowT, x, y, small: true });
   } else if (e.type === 'steal') SND.steal();
+  else if (e.type === 'miss') {
+    if (e.post) SND.post(); else SND.miss();
+    const [x, y] = R.toScreen(V.b[0], V.b[1]);
+    RP.fx.push({ kind: 'pop', text: e.post ? 'POTEAU !' : ['OH LÀ LÀ !', 'PRESQUE !', 'À CÔTÉ !'][Math.floor(Math.random() * 3)], sub: e.who, j: -1, t0: nowT, x, y, small: true });
+  }
 }
 function drawFx(V) {
   const ctx = RP.ctx, R = RP.R, nowT = performance.now();
@@ -177,7 +194,7 @@ function drawFx(V) {
     }
     if (f.kind === 'pop') {
       const life = 1.5; if (k > life) return false;
-      if (V.p[f.j]) { const [x, y] = R.toScreen(V.p[f.j][0], V.p[f.j][1]); f.x += (x - f.x) * .3; f.y += (y - f.y) * .3; }
+      if (f.j >= 0 && V.p[f.j]) { const [x, y] = R.toScreen(V.p[f.j][0], V.p[f.j][1]); f.x += (x - f.x) * .3; f.y += (y - f.y) * .3; }
       const sc = k < .18 ? .4 + k / .18 * .8 : k < .3 ? 1.2 - (k - .18) / .12 * .2 : 1;
       const fs = Math.max(16, Math.min(34, R.W * .045)) * (f.small ? .8 : 1);
       ctx.globalAlpha = k > life - .35 ? (life - k) / .35 : 1;
@@ -196,6 +213,8 @@ function drawFx(V) {
     }
     return false;
   });
+  // flash blanc au moment du but
+  if (RP.flash) { const k = (nowT - RP.flash) / 1000; if (k > .45) RP.flash = 0; else { ctx.globalAlpha = (1 - k / .45) * .55; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, R.W, R.H || 9999); } }
   // ralenti
   if (RP.slow) { ctx.globalAlpha = .85 + Math.sin(nowT / 160) * .15; ctx.font = "800 15px 'Saira Extra Condensed','Arial Narrow',Impact,sans-serif"; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#f0776b'; ctx.fillText('● RALENTI', 14, (R.hud || 0) + 52); }
   ctx.restore();
