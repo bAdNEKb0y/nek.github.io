@@ -6,6 +6,22 @@ const FD = "'Saira Extra Condensed','Arial Narrow',Impact,sans-serif";
 const CHALK = '#eef3ea';
 export const SIDE_COL = ['#ffc94a', '#5ad1e6'];
 const GK_COL = ['#2dd4a0', '#b07cff'];
+/** Pelouses au choix (Paramètres > Personnalisation) */
+export const PITCHES = {
+  classic: { base: '#1b5c33', a: '#24804e', b: '#1f7144' },
+  checker: { base: '#1d6337', a: '#2a8a52', b: '#1f7144', checker: true },
+  night: { base: '#08241a', a: '#0f3d2a', b: '#0b3122', night: true, line: 'rgba(190,225,255,.8)' },
+  snow: { base: '#c9d6d8', a: '#dfe8ea', b: '#cfdcde', snow: true, line: 'rgba(200,40,40,.85)' },
+  street: { base: '#3a3f44', a: '#454b51', b: '#3d4348', line: 'rgba(255,214,90,.9)' },
+};
+/** Ballons au choix */
+export const BALLS = {
+  classic: { g: ['#ffffff', '#eef0f2', '#9aa3ab'], patch: '#1d2420', trail: '255,255,255' },
+  gold: { g: ['#fff6cc', '#f3cf5a', '#9a7424'], patch: '#6b4e12', trail: '255,214,90', glow: 'rgba(255,214,90,.7)' },
+  fire: { g: ['#fff2c4', '#ff9a3c', '#c23b12'], patch: '#7a1d06', trail: '255,120,40', trailK: 2.2, glow: 'rgba(255,110,30,.8)' },
+  retro: { g: ['#e0b483', '#a8693a', '#5e3517'], patch: '#3a1f0c', trail: '230,200,160' },
+  neon: { g: ['#e9fffb', '#5af0d0', '#1a8f86'], patch: '#0b3d3a', trail: '90,240,208', trailK: 2, glow: 'rgba(90,240,208,.85)' },
+};
 
 function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
 export function pickText(h) { const [r, g, b] = hexRgb(h); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#0b1411' : '#ffffff'; }
@@ -95,17 +111,20 @@ export function createRenderer(canvas) {
     }
     // Pelouse : bandes de tonte + damier léger + bruit
     const x0 = R.OX - (GD + 2) * S, y0 = OY0 - 3 * S, w = (FL + 2 * GD + 4) * S, h = (FW + 6) * S;
-    g.fillStyle = '#1b5c33'; g.fillRect(x0, y0, w, h);
+    const PT = PITCHES[SET.pitch] || PITCHES.classic;
+    g.fillStyle = PT.base; g.fillRect(x0, y0, w, h);
     g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
-    for (let i = -1; i < 11; i++) { g.fillStyle = i % 2 ? '#24804e' : '#1f7144'; g.fillRect(R.OX + i * 10 * S, y0, 10 * S, h); }
+    for (let i = -1; i < 11; i++) { g.fillStyle = i % 2 ? PT.a : PT.b; g.fillRect(R.OX + i * 10 * S, y0, 10 * S, h); }
     for (let j = 0; j < 7; j++) { g.fillStyle = j % 2 ? 'rgba(255,255,255,.025)' : 'rgba(0,0,0,.03)'; g.fillRect(x0, OY0 + (j * FW / 7) * S, w, FW / 7 * S); }
+    if (PT.checker) for (let i = -1; i < 11; i++) for (let j = 0; j < 7; j++) if ((i + j) % 2) { g.fillStyle = 'rgba(0,0,0,.07)'; g.fillRect(R.OX + i * 10 * S, OY0 + (j * FW / 7) * S, 10 * S, FW / 7 * S); }
+    if (PT.snow) for (let n = 0; n < w * h / 220; n++) { g.fillStyle = `rgba(255,255,255,${.25 + rand() * .5})`; g.beginPath(); g.arc(x0 + rand() * w, y0 + rand() * h, .6 + rand() * 1.4, 0, Math.PI * 2); g.fill(); }
     for (let n = 0; n < w * h / 60; n++) { g.fillStyle = rand() < .5 ? 'rgba(255,255,255,.035)' : 'rgba(0,0,0,.05)'; g.fillRect(x0 + rand() * w, y0 + rand() * h, 1.2, 1.2); }
     // éclairage des projecteurs
     const lg = g.createRadialGradient(R.OX + 50 * S, OY0 + CX * S, 10, R.OX + 50 * S, OY0 + CX * S, w * .62);
-    lg.addColorStop(0, 'rgba(255,250,220,.08)'); lg.addColorStop(.6, 'rgba(0,0,0,.04)'); lg.addColorStop(1, 'rgba(0,0,0,.3)'); g.fillStyle = lg; g.fillRect(x0, y0, w, h);
+    lg.addColorStop(0, PT.night ? 'rgba(200,225,255,.12)' : 'rgba(255,250,220,.08)'); lg.addColorStop(.6, PT.night ? 'rgba(0,0,20,.25)' : 'rgba(0,0,0,.04)'); lg.addColorStop(1, PT.night ? 'rgba(0,0,15,.6)' : 'rgba(0,0,0,.3)'); g.fillStyle = lg; g.fillRect(x0, y0, w, h);
     g.restore();
     // Lignes
-    g.strokeStyle = 'rgba(240,248,236,.85)'; g.lineWidth = Math.max(1.2, S * .3);
+    g.strokeStyle = PT.line || 'rgba(240,248,236,.85)'; g.lineWidth = Math.max(1.2, S * .3);
     g.strokeRect(R.OX, OY0, FL * S, FW * S);
     const mx = R.OX + 50 * S, my = OY0 + CX * S;
     g.beginPath(); g.moveTo(mx, OY0); g.lineTo(mx, OY0 + FW * S); g.stroke();
@@ -313,14 +332,17 @@ export function createRenderer(canvas) {
     const gx = sx(V.b[0], V.b[1]), gy = sy(V.b[0], V.b[1]), z = V.b[5] || 0;
     const r = Math.max(3.5, BR * R.S * 1.2) * (1 + z * .07), x = gx, y = gy - z * R.S * .9;
     if (V.b[3] < 0 && V.b[4] > 30) { trail.push([x, y]); if (trail.length > 12) trail.shift(); } else if (trail.length) trail.shift();
-    trail.forEach((q, i) => { ctx.fillStyle = `rgba(255,255,255,${.04 + i / trail.length * .16})`; ctx.beginPath(); ctx.arc(q[0], q[1], r * (.5 + i / trail.length * .5), 0, Math.PI * 2); ctx.fill(); });
+    const BS = BALLS[SET.ball] || BALLS.classic;
+    trail.forEach((q, i) => { ctx.fillStyle = `rgba(${BS.trail},${(.04 + i / trail.length * .16) * (BS.trailK || 1)})`; ctx.beginPath(); ctx.arc(q[0], q[1], r * (.5 + i / trail.length * .5), 0, Math.PI * 2); ctx.fill(); });
     const sr = Math.max(3.5, BR * R.S * 1.2);
     ctx.fillStyle = `rgba(0,0,0,${Math.max(.12, .35 - z * .05)})`; ctx.beginPath(); ctx.ellipse(gx + sr * .35 + z * R.S * .25, gy + sr * .5, sr * (1 + z * .05), sr * .75, 0, 0, Math.PI * 2); ctx.fill();
     const bg = ctx.createRadialGradient(x - r * .4, y - r * .45, r * .1, x, y, r * 1.05);
-    bg.addColorStop(0, '#ffffff'); bg.addColorStop(.6, '#eef0f2'); bg.addColorStop(1, '#9aa3ab');
+    bg.addColorStop(0, BS.g[0]); bg.addColorStop(.6, BS.g[1]); bg.addColorStop(1, BS.g[2]);
+    if (BS.glow) { ctx.save(); ctx.shadowColor = BS.glow; ctx.shadowBlur = r * 1.6; }
     ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    if (BS.glow) ctx.restore();
     ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
-    ctx.fillStyle = '#1d2420';
+    ctx.fillStyle = BS.patch;
     const sp = V.b[2];
     for (let k = 0; k < 5; k++) { // panneaux qui tournent avec le ballon
       const a = sp + k * 1.2566, d = r * (.62 + .18 * Math.sin(sp * .7 + k)), px = x + Math.cos(a) * d, py = y + Math.sin(a) * d;
@@ -538,7 +560,7 @@ export function createRenderer(canvas) {
     drawBanner(V, M);
     if (ui.replay) drawReplay(V);
     drawHUD(V, M, ui);
-    if (!ui.replay) drawControls(V, M, ui);
+    if (!ui.replay) { ctx.save(); ctx.globalAlpha = SET.ctrlA ?? 1; drawControls(V, M, ui); ctx.restore(); }
     if (ui.overlay) {
       ctx.fillStyle = 'rgba(6,12,10,.7)'; ctx.fillRect(0, R.hud, R.W, R.H - R.hud);
       ctx.fillStyle = CHALK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${Math.min(42, R.W * .05)}px ${FD}`;

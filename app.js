@@ -6,7 +6,7 @@ import { SET, onSetting, resetSettings } from './settings.js';
 import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundOn, setSound } from './sound.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
-import { createRenderer, pickText, SIDE_COL } from './render.js';
+import { createRenderer, pickText, SIDE_COL, PITCHES, BALLS } from './render.js';
 import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList, inviteToRoom, isOnline } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
@@ -212,8 +212,24 @@ $('#trade').addEventListener('click', e => { if (e.target.id === 'trade') closeT
 $('#bTrades').addEventListener('click', openTrades);
 
 /* ---------- Paramètres ---------- */
-onSetting(k => { if (['saver', 'cam', 'btn', 'lefty'].includes(k) && GAME) R.resize(); });
+onSetting(k => { if (['saver', 'cam', 'btn', 'lefty', 'pitch'].includes(k) && GAME) R.resize(); if (k === 'theme' || k === 'textSize') applyLook(); });
+const THEMES = { or: ['#ffc94a', '#f3d27a', '#9a7424'], bleu: ['#5ab8ff', '#9fd4ff', '#2a5f96'], rose: ['#ff6fae', '#ffb3d4', '#a3346a'], vert: ['#5fe08a', '#a8f0bf', '#2c7a48'], violet: ['#b58cff', '#d6c2ff', '#5d3a9e'], rouge: ['#ff6a5a', '#ffb0a6', '#9e2c22'] };
+function applyLook() {
+  const t = THEMES[SET.theme] || THEMES.or, st = document.documentElement.style;
+  st.setProperty('--flood', t[0]); st.setProperty('--gold-1', t[1]); st.setProperty('--gold-2', t[2]);
+  document.body.style.fontSize = Math.round(15 * (SET.textSize || 1)) + 'px';
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', '#0b1411');
+}
+applyLook();
+const sw = c => `<i class="sw" style="background:${c}"></i>`;
 const SETUI = [
+  ['Personnalisation', [
+    ['theme', 'Couleur du jeu', [['or', sw('#ffc94a') + 'Or'], ['bleu', sw('#5ab8ff') + 'Bleu'], ['rose', sw('#ff6fae') + 'Rose'], ['vert', sw('#5fe08a') + 'Vert'], ['violet', sw('#b58cff') + 'Violet'], ['rouge', sw('#ff6a5a') + 'Rouge']], 'Les boutons, les titres et les menus prennent cette couleur'],
+    ['pitch', 'Terrain', [['classic', '🟩 Classique'], ['checker', '🏁 Damier'], ['night', '🌙 De nuit'], ['snow', '❄️ Neige'], ['street', '🏙️ Bitume']]],
+    ['ball', 'Ballon', [['classic', '⚪ Classique'], ['gold', '🟡 Doré'], ['fire', '🔥 Feu'], ['retro', '🟤 Rétro'], ['neon', '💠 Néon']], 'Le Feu et le Néon laissent une traînée brillante'],
+    ['textSize', 'Taille du texte', [[.92, 'Petit'], [1, 'Normal'], [1.1, 'Grand']]],
+    ['ctrlA', 'Commandes en match', [[1, 'Bien visibles'], [.7, 'Transparentes'], [.45, 'Très discrètes']]],
+  ]],
   ['Son', [
     ['vol', 'Volume des effets', 'range'],
     ['crowd', 'Bruit de la foule', 'range'],
@@ -254,6 +270,7 @@ const SETUI = [
 function renderSettings() {
   const el = $('#settings');
   el.innerHTML = `<div class="box setbox"><div class="cardhead"><h2>Paramètres</h2><button class="link" data-x="close">Fermer</button></div>
+    <div class="setprev" aria-hidden="true"><canvas width="300" height="90" id="setPrevCv"></canvas></div>
     ${SETUI.map(([sec, rows]) => `<section class="setsec"><h3>${sec}</h3>${rows.map(([k, lab, opt, hint]) => `<div class="setrow"><div class="setlab">${lab}${hint ? `<small>${hint}</small>` : ''}</div>${opt === 'range'
       ? `<div class="setrange"><input type="range" min="0" max="100" step="5" value="${SET[k]}" data-k="${k}" aria-label="${lab}"><b>${SET[k] === 0 ? 'Coupé' : SET[k] + ' %'}</b></div>`
       : `<div class="chips">${opt.map(([v, t]) => `<button class="chip" data-k="${k}" data-v='${JSON.stringify(v)}' aria-pressed="${SET[k] === v}">${t}</button>`).join('')}</div>`}</div>`).join('')}</section>`).join('')}
@@ -266,7 +283,25 @@ function renderSettings() {
   el.querySelector('[data-x=close]').onclick = closeSettings;
   el.querySelector('[data-x=reset]').onclick = () => { resetSettings(); renderSettings(); toast('Paramètres remis par défaut.'); };
   el.querySelector('[data-x=tuto]').onclick = () => { closeSettings(); openTuto(); };
-  renderPushRow(); bindInstall(el);
+  renderPushRow(); bindInstall(el); drawSetPreview();
+}
+/** Aperçu de la pelouse et du ballon choisis */
+function drawSetPreview() {
+  const cv = $('#setPrevCv'); if (!cv) return;
+  const d = Math.min(2, devicePixelRatio || 1), W = cv.clientWidth || 300, H = 90; cv.width = W * d; cv.height = H * d;
+  const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+  const P = PITCHES[SET.pitch] || PITCHES.classic, B = BALLS[SET.ball] || BALLS.classic;
+  g.fillStyle = P.base; g.fillRect(0, 0, W, H);
+  for (let i = 0; i * 30 < W; i++) { g.fillStyle = i % 2 ? P.a : P.b; g.fillRect(i * 30, 0, 30, H); if (P.checker) for (let j = 0; j < 3; j++) if ((i + j) % 2) { g.fillStyle = 'rgba(0,0,0,.07)'; g.fillRect(i * 30, j * 30, 30, 30); } }
+  if (P.night) { g.fillStyle = 'rgba(0,0,20,.35)'; g.fillRect(0, 0, W, H); }
+  if (P.snow) for (let n = 0; n < 60; n++) { g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.arc((n * 97) % W, (n * 53) % H, 1.2, 0, 7); g.fill(); }
+  g.strokeStyle = P.line || 'rgba(240,248,236,.85)'; g.lineWidth = 2; g.strokeRect(10, 10, W - 20, H - 20); g.beginPath(); g.moveTo(W / 2, 10); g.lineTo(W / 2, H - 10); g.stroke(); g.beginPath(); g.arc(W / 2, H / 2, 20, 0, 7); g.stroke();
+  for (let i = 0; i < 6; i++) { g.fillStyle = `rgba(${B.trail},${(.05 + i * .04) * (B.trailK || 1)})`; g.beginPath(); g.arc(W / 2 - 70 + i * 10, H / 2 + 8 - i * 1.4, 4 + i, 0, 7); g.fill(); }
+  const x = W / 2 - 4, y = H / 2, r = 11, bg = g.createRadialGradient(x - 4, y - 5, 1, x, y, r);
+  bg.addColorStop(0, B.g[0]); bg.addColorStop(.6, B.g[1]); bg.addColorStop(1, B.g[2]);
+  if (B.glow) { g.shadowColor = B.glow; g.shadowBlur = 16; }
+  g.fillStyle = bg; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.shadowBlur = 0;
+  g.fillStyle = B.patch; g.beginPath(); for (let j = 0; j < 5; j++) { const a = j * 1.2566; g[j ? 'lineTo' : 'moveTo'](x + Math.cos(a) * 3.5, y + Math.sin(a) * 3.5); } g.fill();
 }
 async function renderPushRow() {
   const el = $('#pushRow'); if (!el) return;

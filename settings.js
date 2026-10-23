@@ -23,6 +23,11 @@ export const DEF = {
   quickOpen: false, // messages rapides ouverts directement dans le chat
   dailyPopup: true, // cadeau du jour proposé à l'ouverture du jeu
   assist: true,     // assistance au tir près du but
+  theme: 'or',      // couleur du jeu (menus, boutons)
+  textSize: 1,      // taille du texte des menus : .92 / 1 / 1.1
+  pitch: 'classic', // pelouse : classic / checker / night / snow / street
+  ball: 'classic',  // ballon : classic / gold / fire / retro / neon
+  ctrlA: 1,         // opacité des commandes tactiles en match
 };
 let S = { ...DEF };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { }
