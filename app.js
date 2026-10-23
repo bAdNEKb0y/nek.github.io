@@ -749,6 +749,11 @@ async function finishGame(sum) {
       p_my_team: M.team[me].short, p_opp_team: M.team[op].short, p_my_score: myS, p_opp_score: opS, p_is_home: me === 0,
     });
     if (!error && data) { rating = { before: ME.rating, after: data.rating, coins: myS > opS ? 500 : myS === opS ? 250 : 120 }; rating.coins += 60 * Math.min(myS, 10); ME = data; loadCollection(); }
+  } else if (!g.online && ME && !sum.forfeit) {
+    // Entraînement contre l'ordi : petite récompense en pièces (moins qu'en ligne)
+    const { data, error } = await sb.rpc('reward_solo', { p_my_score: myS, p_opp_score: opS });
+    if (!error && data) { g.solo = data.reward; if (COL) COL.coins = data.coins; }
+    else if (error && /too_soon/.test(error.message || '')) g.solo = -1;
   }
   renderEnd(g, sum, rating);
   GAME = null;
@@ -769,7 +774,7 @@ function renderEnd(g, sum, rating) {
     ${sum.players && sum.scorers?.length ? `<div class="sb-goals"><ul>${goals(me)}</ul><ul>${goals(op)}</ul></div>` : ''}
   </div>
   <div class="verdict ${res}">${res === 'w' ? 'Victoire !' : res === 'l' ? 'Défaite' : 'Match nul'}</div>${sum.msg ? `<p class="hint">${esc(sum.msg)}</p>` : ''}`;
-  $('#endRating').innerHTML = rating ? `<div class="rating"><span>Classement</span><b>${rating.after}</b><span class="d ${rating.after >= rating.before ? 'up' : 'down'}">${rating.after >= rating.before ? '+' : ''}${rating.after - rating.before}</span><span class="coins" style="margin-left:auto">+${rating.coins}</span></div>` : g.online ? '' : '<p class="hint">Les matchs d\'entraînement ne comptent pas au classement.</p>';
+  $('#endRating').innerHTML = rating ? `<div class="rating"><span>Classement</span><b>${rating.after}</b><span class="d ${rating.after >= rating.before ? 'up' : 'down'}">${rating.after >= rating.before ? '+' : ''}${rating.after - rating.before}</span><span class="coins" style="margin-left:auto">+${rating.coins}</span></div>` : g.online ? '' : g.solo > 0 ? `<div class="rating"><span>Entraînement</span><b style="font-size:1rem">Pièces gagnées</b><span class="coins" style="margin-left:auto">+${g.solo}</span></div><p class="hint">Contre l'ordi : moins de pièces qu'en ligne, et le classement ne bouge pas.</p>` : g.solo === -1 ? '<p class="hint">Match trop court pour gagner des pièces. Contre l\'ordi, les pièces arrivent après un vrai match.</p>' : '<p class="hint">Les matchs d\'entraînement ne comptent pas au classement.</p>';
   if (sum.players) {
     const P = sum.players.map(p => ({ ...p, n: noteOf(p, sc) }));
     const mvp = P.slice().sort((a, b) => b.n - a.n)[0], mc = mvp.gk ? '#2dd4a0' : M.kit[mvp.t].c1;
