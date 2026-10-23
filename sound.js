@@ -1,13 +1,15 @@
 /* Sons du jeu, tous synthétisés (pas de fichiers à charger) : frappes, sifflet, poteau, foule, but… */
-let AC = null, OUT = null, NOISE = null, CROWD = null, ON = true;
-try { ON = localStorage.getItem('fdp-sound') !== '0'; } catch { }
+import { SET, onSetting } from './settings.js';
+let AC = null, OUT = null, NOISE = null, CROWD = null, lastVol = 80;
+const gainOf = () => Math.max(0, Math.min(100, SET.vol)) / 100;
+onSetting(k => { if (k === 'vol' && OUT) OUT.gain.setTargetAtTime(gainOf(), AC.currentTime, .05); if (k === 'crowd' && CROWD) crowdLevel(CROWD.k ?? .3, true); });
 
 export function audio() {
   if (!AC) {
     try {
       AC = new (window.AudioContext || window.webkitAudioContext)();
       const comp = AC.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
-      OUT = AC.createGain(); OUT.gain.value = ON ? .9 : 0; OUT.connect(comp); comp.connect(AC.destination);
+      OUT = AC.createGain(); OUT.gain.value = gainOf(); OUT.connect(comp); comp.connect(AC.destination);
       const len = AC.sampleRate * 2; NOISE = AC.createBuffer(1, len, AC.sampleRate);
       const d = NOISE.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     } catch { AC = null; }
@@ -15,11 +17,8 @@ export function audio() {
   if (AC && AC.state === 'suspended') AC.resume().catch(() => { });
   return AC;
 }
-export const soundOn = () => ON;
-export function setSound(v) {
-  ON = !!v; try { localStorage.setItem('fdp-sound', ON ? '1' : '0'); } catch { }
-  if (OUT) OUT.gain.setTargetAtTime(ON ? .9 : 0, AC.currentTime, .05);
-}
+export const soundOn = () => SET.vol > 0;
+export function setSound(v) { if (v) SET.vol = lastVol || 80; else { lastVol = SET.vol || 80; SET.vol = 0; } }
 const now = () => AC.currentTime;
 function env(g, t0, a, peak, dur) { g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur); }
 function osc(type, f, t0, dur, vol, f2, dest = OUT) {
@@ -34,7 +33,7 @@ function noise(t0, dur, vol, ftype, freq, q = .8, f2, a = .004) {
   env(g, t0, a, vol, dur); s.connect(f); f.connect(g); g.connect(OUT);
   s.start(t0, Math.random() * 1.5); s.stop(t0 + dur + .05);
 }
-const ok = () => AC && OUT && ON;
+const ok = () => AC && OUT && SET.vol > 0;
 
 /** Ancienne API simple (encore utilisée par l'ouverture des packs) */
 export function tone(f, dur, type, vol, f2, delay) { if (!ok()) return; try { osc(type || 'sine', f, now() + (delay || 0), dur, vol || .15, f2); } catch { } }
@@ -80,8 +79,8 @@ export function crowdStart() {
     s.buffer = NOISE; s.loop = true; f.type = 'bandpass'; f.frequency.value = 650; f.Q.value = .5;
     g.gain.value = 0; lfo.frequency.value = .13; lg.gain.value = .012; lfo.connect(lg); lg.connect(g.gain);
     s.connect(f); f.connect(g); g.connect(OUT); s.start(); lfo.start();
-    CROWD = { s, g, lfo, lvl: .03 }; g.gain.setTargetAtTime(.03, AC.currentTime, .8);
+    CROWD = { s, g, lfo, lg, lvl: 0 }; crowdLevel(.3, true);
   } catch { CROWD = null; }
 }
-export function crowdLevel(k) { if (!CROWD || !AC) return; const v = .025 + Math.max(0, Math.min(1, k)) * .05; if (Math.abs(v - CROWD.lvl) > .004) { CROWD.lvl = v; CROWD.g.gain.setTargetAtTime(v, AC.currentTime, .5); } }
+export function crowdLevel(k, force) { if (!CROWD || !AC) return; CROWD.k = k; const v = (.025 + Math.max(0, Math.min(1, k)) * .05) * (SET.crowd / 60); if (force || Math.abs(v - CROWD.lvl) > .004) { CROWD.lvl = v; CROWD.g.gain.setTargetAtTime(Math.max(.0001, v), AC.currentTime, .5); CROWD.lg.gain.setTargetAtTime(v * .4, AC.currentTime, .5); } }
 export function crowdStop() { if (!CROWD || !AC) return; const c = CROWD; CROWD = null; try { c.g.gain.setTargetAtTime(.0001, AC.currentTime, .3); c.s.stop(AC.currentTime + 1.2); c.lfo.stop(AC.currentTime + 1.2); } catch { } }

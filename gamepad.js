@@ -101,7 +101,7 @@ function visible(el) {
 }
 function scope() {
   // un calque ouvert (pack, sélection de joueur, tuto, menu) a la priorité
-  for (const id of ['tuto', 'pack', 'picker', 'menu']) { const o = document.getElementById(id); if (o && !o.hidden) return o; }
+  for (const id of ['settings', 'tuto', 'pack', 'picker', 'menu']) { const o = document.getElementById(id); if (o && !o.hidden) return o; }
   return document.querySelector('.screen:not([hidden])') || document.body;
 }
 function items() { return [...scope().querySelectorAll(SEL)].filter(visible); }
@@ -109,6 +109,9 @@ function navigate(dir) {
   const list = items(); if (!list.length) return;
   let cur = document.activeElement;
   if (!list.includes(cur)) { focus(list[0]); return; }
+  if (cur.type === 'range' && (dir === 'l' || dir === 'r')) { // curseur : gauche/droite change la valeur
+    cur.value = +cur.value + (dir === 'r' ? 1 : -1) * (+cur.step || 1); cur.dispatchEvent(new Event('input', { bubbles: true })); return;
+  }
   const a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
   let best = null, bs = Infinity;
   for (const el of list) {

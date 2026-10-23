@@ -48,7 +48,7 @@
   <section id="home" class="screen" hidden>
     <header class="topbar">
       <div class="logo">FOOT <span>DE POCHE</span></div>
-      <div class="hdr-right"><span class="coins" id="coinsHome" title="Pièces"></span><div class="me" id="meCard"></div></div>
+      <div class="hdr-right"><span class="coins" id="coinsHome" title="Pièces"></span><div class="me" id="meCard"></div><button class="gear" id="bSettings" aria-label="Paramètres" title="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8.6-2.1-.1-2.8 2-1.6-2-3.4-2.4.9-2.4-1.4-.4-2.6h-4l-.4 2.6-2.4 1.4-2.4-.9-2 3.4 2 1.6-.1 2.8-1.9 1.6 2 3.4 2.4-.9 2.4 1.4.4 2.6h4l.4-2.6 2.4-1.4 2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button></div>
     </header>
     <div class="homegrid">
       <div class="col">
@@ -168,6 +168,7 @@
         <button class="btn primary" id="bResume">Reprendre</button>
         <button class="btn" id="bFull">Plein écran</button>
         <button class="btn" id="bSound">Son : activé</button>
+        <button class="btn" id="bSettings2">Paramètres</button>
         <button class="btn danger" id="bQuit">Abandonner le match</button>
       </div>
     </div>
@@ -192,6 +193,7 @@
   <div id="pack" class="overlay pk" hidden></div>
   <div id="picker" class="overlay sheet" hidden></div>
   <div id="tuto" class="overlay tuto" hidden></div>
+  <div id="settings" class="overlay sheet setov" hidden></div>
   <div class="toast" id="toast" role="status"></div>
 </div>
 <script type="module" src="app.js"></script>

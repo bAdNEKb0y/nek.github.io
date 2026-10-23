@@ -2,6 +2,7 @@ import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, custo
 import { predictOwn } from './predict.js';
 import { openTuto, tutoSeen } from './tuto.js';
 import { PAD, initPad, pollPad, rumble, padLabels } from './gamepad.js';
+import { SET, onSetting, resetSettings } from './settings.js';
 import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundOn, setSound } from './sound.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
@@ -19,7 +20,7 @@ let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 
 /* ---------- Son ---------- */
-const buzz = ms => { try { navigator.vibrate?.(ms); } catch { } if (PAD.on) { const t = Array.isArray(ms) ? ms.reduce((a, b) => a + b, 0) : ms; rumble(Math.max(40, t), t > 100 ? 1 : .55, .5); } };
+const buzz = ms => { if (!SET.vib) return; try { navigator.vibrate?.(ms); } catch { } if (PAD.on) { const t = Array.isArray(ms) ? ms.reduce((a, b) => a + b, 0) : ms; rumble(Math.max(40, t), t > 100 ? 1 : .55, .5); } };
 setPackSounds({ tone, cheer, buzz });
 initPackOverlay();
 function playEvent(type, val) {
@@ -140,6 +141,52 @@ $('#joinForm').addEventListener('submit', e => {
 });
 $('#bSolo').addEventListener('click', () => { audio(); if (!tutoSeen()) openTuto(startSolo); else startSolo(); });
 $('#bTuto').addEventListener('click', () => openTuto());
+
+/* ---------- Paramètres ---------- */
+onSetting(k => { if (['saver', 'cam', 'btn', 'lefty'].includes(k) && GAME) R.resize(); });
+const SETUI = [
+  ['Son', [
+    ['vol', 'Volume des effets', 'range'],
+    ['crowd', 'Bruit de la foule', 'range'],
+  ]],
+  ['Jeu', [
+    ['diff', 'Niveau de l\'ordi', [[0, 'Facile'], [1, 'Normal'], [2, 'Costaud']]],
+    ['soloDur', 'Durée contre l\'ordi', [[120, '2 min'], [180, '3 min'], [300, '5 min']]],
+    ['replay', 'Ralenti après les buts', [[true, 'Oui'], [false, 'Non']]],
+  ]],
+  ['Commandes', [
+    ['lefty', 'Main', [[false, 'Droitier'], [true, 'Gaucher']], 'Gaucher : joystick à droite, boutons à gauche'],
+    ['btn', 'Taille des boutons', [[.85, 'Petits'], [1, 'Normaux'], [1.2, 'Grands']]],
+    ['vib', 'Vibrations', [[true, 'Oui'], [false, 'Non']]],
+  ]],
+  ['Affichage', [
+    ['cam', 'Caméra', [['near', 'Proche'], ['wide', 'Tout le terrain']]],
+    ['labels', 'Noms des joueurs', [[true, 'Oui'], [false, 'Non']]],
+    ['aim', 'Cible des ballons en l\'air', [[true, 'Oui'], [false, 'Non']]],
+    ['shake', 'Écran qui tremble sur les buts', [[true, 'Oui'], [false, 'Non']]],
+    ['saver', 'Économie de batterie', [[false, 'Non'], [true, 'Oui']], '30 images/s et moins de pixels : la batterie dure plus longtemps'],
+    ['fps', 'Afficher les images/s', [[false, 'Non'], [true, 'Oui']]],
+  ]],
+];
+function renderSettings() {
+  const el = $('#settings');
+  el.innerHTML = `<div class="box setbox"><div class="cardhead"><h2>Paramètres</h2><button class="link" data-x="close">Fermer</button></div>
+    ${SETUI.map(([sec, rows]) => `<section class="setsec"><h3>${sec}</h3>${rows.map(([k, lab, opt, hint]) => `<div class="setrow"><div class="setlab">${lab}${hint ? `<small>${hint}</small>` : ''}</div>${opt === 'range'
+      ? `<div class="setrange"><input type="range" min="0" max="100" step="5" value="${SET[k]}" data-k="${k}" aria-label="${lab}"><b>${SET[k] === 0 ? 'Coupé' : SET[k] + ' %'}</b></div>`
+      : `<div class="chips">${opt.map(([v, t]) => `<button class="chip" data-k="${k}" data-v='${JSON.stringify(v)}' aria-pressed="${SET[k] === v}">${t}</button>`).join('')}</div>`}</div>`).join('')}</section>`).join('')}
+    <section class="setsec"><h3>Autres</h3><div class="setbtns"><button class="btn" data-x="tuto">Revoir le tuto</button><button class="btn" data-x="reset">Remettre par défaut</button></div>
+    <p class="hint">Les paramètres sont gardés sur cet appareil.</p></section></div>`;
+  el.querySelectorAll('.chip[data-k]').forEach(b => b.onclick = () => { SET[b.dataset.k] = JSON.parse(b.dataset.v); renderSettings(); el.querySelector(`[data-k="${b.dataset.k}"][aria-pressed="true"]`)?.focus({ preventScroll: true }); });
+  el.querySelectorAll('input[type=range]').forEach(r => r.oninput = () => { SET[r.dataset.k] = +r.value; r.nextElementSibling.textContent = +r.value === 0 ? 'Coupé' : r.value + ' %'; if (r.dataset.k === 'vol') { audio(); SND.click(); } });
+  el.querySelector('[data-x=close]').onclick = closeSettings;
+  el.querySelector('[data-x=reset]').onclick = () => { resetSettings(); renderSettings(); toast('Paramètres remis par défaut.'); };
+  el.querySelector('[data-x=tuto]').onclick = () => { closeSettings(); openTuto(); };
+}
+function openSettings() { renderSettings(); $('#settings').hidden = false; $('#settings').querySelector('.chip,input')?.focus({ preventScroll: true }); }
+function closeSettings() { $('#settings').hidden = true; soundLabel(); }
+$('#settings').addEventListener('click', e => { if (e.target.id === 'settings') closeSettings(); });
+$('#bSettings').addEventListener('click', openSettings);
+$('#bSettings2')?.addEventListener('click', openSettings);
 
 /* ---------- Collection, packs et équipe perso ---------- */
 let COL = null, clockOffset = 0;
@@ -489,7 +536,7 @@ function hit(x, y) {
   if (R.menuBtn && Math.hypot(x - R.menuBtn.x, y - R.menuBtn.y) < R.menuBtn.r) return 'M';
   if (Math.hypot(x - g.bx, y - g.by) < g.br * 1.45) return 'B';
   if (Math.hypot(x - g.ax, y - g.ay) < g.ar * 1.5) return 'A';
-  if (x < R.W * .5 && y > R.hud) return 'J';
+  if ((SET.lefty ? x > R.W * .5 : x < R.W * .5) && y > R.hud) return 'J';
   return null;
 }
 function updJoy() {
@@ -540,6 +587,7 @@ addEventListener('keyup', e => {
 function bPress() { if (LI.bDown) return; LI.bDown = true; LI.b++; }
 function bRelease() { if (!LI.bDown) return; localKick(1.3); LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
 function closeTop() {
+  if (!$('#settings').hidden) { closeSettings(); return true; }
   if (!$('#menu').hidden) { $('#menu').hidden = true; return true; }
   for (const id of ['tuto', 'pack', 'picker']) {
     const o = $('#' + id); if (o.hidden) continue;
@@ -550,7 +598,7 @@ function closeTop() {
   return false;
 }
 initPad({
-  inGame: () => !!GAME && !GAME.done && !$('#game').hidden && $('#menu').hidden,
+  inGame: () => !!GAME && !GAME.done && !$('#game').hidden && $('#menu').hidden && $('#settings').hidden,
   aDown: () => { audio(); if (GAME?.replay && performance.now() >= GAME.replay.start) { stopReplay(GAME); return; } aPress(); }, aUp: () => aRelease(),
   bDown: () => { audio(); bPress(); }, bUp: () => bRelease(),
   lob: () => { audio(); if (myBall()) { LI.l++; LI.aFlash = .15; buzz([10, 30, 18]); } else { LI.a++; LI.aFlash = .15; } },
@@ -592,7 +640,7 @@ function resetLocalInput() { Object.assign(LI, { tx: 0, ty: 0, joyOn: false, a: 
 function startSolo() {
   const custom = ME?.fav_team === 'PERSO' && COL;
   const t0 = teamIdx(ME?.fav_team || 'PSG'); let t1 = Math.floor(Math.random() * TEAMS.length); if (!custom && t1 === t0) t1 = (t1 + 1) % TEAMS.length;
-  const cfg = { teams: [custom ? customTeam(COL.team) : TEAMS[t0], TEAMS[t1]], dur: 180 };
+  const cfg = { teams: [custom ? customTeam(COL.team) : TEAMS[t0], TEAMS[t1]], dur: SET.soloDur || 180, diff: SET.diff ?? 1 };
   beginGame({ cfg, side: 0, online: false, names: [ME?.display || 'Toi', 'Ordi'] });
 }
 function startOnline(cfg, side) {
@@ -607,7 +655,7 @@ function beginGame({ cfg, side, online, names, uids }) {
     remote: null, prevL: { a: 0, l: 0, b: 0, r: 0 }, prevR: { a: 0, l: 0, b: 0, r: 0 }, snaps: [], lastSnapAt: performance.now(),
     acc: 0, tick: 0, sentAt: 0, lastSent: '', done: false, peerGoneAt: 0, endData: null,
   };
-  if (side === 0) g.G = createMatch({ teams: M.team, dur: cfg.dur, humans, diff: 1 });
+  if (side === 0) g.G = createMatch({ teams: M.team, dur: cfg.dur, humans, diff: cfg.diff ?? 1 });
   g.onSnap = d => { const now = performance.now(); const dtA = now - g.lastSnapAt; if (dtA > 0 && dtA < 400) { g.ia = g.ia ? g.ia * .9 + dtA * .1 : dtA; g.jit = (g.jit || 0) * .9 + Math.abs(dtA - g.ia) * .1; } g.lastSnapAt = now; if (g.snaps.length && d.q <= g.snaps[g.snaps.length - 1].q) return; g.snaps.push({ at: now, q: d.q, s: d.s }); if (g.snaps.length > 30) g.snaps.shift(); };
   g.onEnd = d => { if (!g.done) finishGame(d); };
   g.forfeit = (iWin, msg) => { if (g.done) return; const sc = iWin ? [3, 0] : [0, 3]; finishGame({ forfeit: true, msg, score: side === 0 ? sc : [sc[1], sc[0]] }); };
@@ -637,6 +685,7 @@ function interp(snaps, now) {
 /* Ralenti du but : on garde les ~2,3 s avant le but et on les rejoue pendant la pause (2,8 s + coup d'envoi) */
 const RP_DELAY = 900, RP_SPEED = .62;
 function startReplay(g, now) {
+  if (!SET.replay) return;
   const fr = (g.hist || []).filter(h => now - h.at <= 2300);
   if (fr.length < 8) return;
   g.replay = { frames: fr.slice(), t0: fr[0].at, goalAt: now, start: now + RP_DELAY, dur: (fr[fr.length - 1].at - fr[0].at) / RP_SPEED };
@@ -715,6 +764,7 @@ function frame(now) {
     if (g.online && g.side === 1 && !ROOM?.peer && g.V) overlay = `${g.names[0]} s'est déconnecté…`;
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
     const rp = replayFrame(g, now);
+    if (SET.saver && (g.fr = (g.fr || 0) + 1) % 2) { requestAnimationFrame(frame); return; } // économie : 30 images/s
     R.draw(rp || g.V, g.M, { me: g.side, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
   }
   requestAnimationFrame(frame);

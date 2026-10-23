@@ -1,5 +1,6 @@
 /* Rendu du match en paysage. Chaque joueur voit son équipe attaquer vers la droite. */
 import { FW, FL, GH, GD, PR, BR, CX } from './engine.js';
+import { SET } from './settings.js';
 
 const FD = "'Saira Extra Condensed','Arial Narrow',Impact,sans-serif";
 const CHALK = '#eef3ea';
@@ -23,22 +24,24 @@ export function createRenderer(canvas) {
   R.resize = () => {
     const r = canvas.getBoundingClientRect();
     R.W = Math.max(200, r.width); R.H = Math.max(160, r.height);
-    R.DPR = Math.min(window.devicePixelRatio || 1, 2);
+    R.DPR = SET.saver ? 1 : Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(R.W * R.DPR); canvas.height = Math.round(R.H * R.DPR);
     R.hud = R.H < 420 ? 40 : 52;
     const availH = R.H - R.hud - 10, availW = R.W - 20;
     const fit = Math.min(availH / (FW + 5), availW / (FL + 2 * GD + 4));
     // Téléphone : on zoome (largeur du terrain remplie) et la caméra suit le ballon
-    R.S = Math.max(fit, Math.min(availW / (FL + 2 * GD + 4), availH / (FW * .72)));
+    R.S = SET.cam === 'wide' ? fit : Math.max(fit, Math.min(availW / (FL + 2 * GD + 4), availH / (FW * .72)));
     R.OX = (R.W - FL * R.S) / 2;
     R.viewH = R.H - R.hud; R.follow = (FW + 6) * R.S > R.viewH;
     R.OY = R.hud + 4 + (availH - FW * R.S) / 2; R.camLat = FW / 2;
     const u = Math.min(R.W, R.H * 1.9);
+    const z = SET.btn || 1;
     R.ctrl = {
-      jx: Math.max(90, R.W * .12), jy: R.H - Math.max(86, R.H * .24), jr: clamp(u * .075, 44, 82),
-      bx: R.W - Math.max(70, R.W * .075), by: R.H - Math.max(100, R.H * .3), br: clamp(u * .052, 34, 60),
-      ax: R.W - Math.max(150, R.W * .16), ay: R.H - Math.max(56, R.H * .14), ar: clamp(u * .043, 28, 50),
+      jx: Math.max(90, R.W * .12) * Math.max(1, z * .95), jy: R.H - Math.max(86, R.H * .24) * Math.max(1, z * .95), jr: clamp(u * .075, 44, 82) * z,
+      bx: R.W - Math.max(70, R.W * .075) * Math.max(1, z), by: R.H - Math.max(100, R.H * .3) * Math.max(1, z * .95), br: clamp(u * .052, 34, 60) * z,
+      ax: R.W - Math.max(150, R.W * .16) * Math.max(1, z), ay: R.H - Math.max(56, R.H * .14) * Math.max(1, z * .95), ar: clamp(u * .043, 28, 50) * z,
     };
+    if (SET.lefty) for (const k of ['jx', 'bx', 'ax']) R.ctrl[k] = R.W - R.ctrl[k]; // gaucher : on inverse les côtés
   };
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
@@ -234,7 +237,7 @@ export function createRenderer(canvas) {
       ctx.fillStyle = c; ctx.strokeStyle = 'rgba(8,12,10,.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(x - r * .5, ay - r * .5); ctx.lineTo(x + r * .5, ay - r * .5); ctx.lineTo(x, ay + r * .1); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
-    if (ctrl || V.b[3] === i) LABELS.push([i, x, y, r, ctrl]);
+    if (SET.labels ? (ctrl || V.b[3] === i) : (ctrl && V.b[3] === i && V.ch[t] > 0)) LABELS.push([i, x, y, r, ctrl]);
   }
   /** Étiquettes nom + jauge de tir, dessinées après tous les joueurs pour rester lisibles */
   const LABELS = [];
@@ -260,7 +263,7 @@ export function createRenderer(canvas) {
   /** Cible au sol : où le ballon en l'air va retomber */
   function drawLanding(V) {
     const lx = V.b[6], ly = V.b[7], tl = V.b[8];
-    if (lx == null || lx < 0 || !(V.b[5] > .3)) return;
+    if (!SET.aim || lx == null || lx < 0 || !(V.b[5] > .3)) return;
     const x = sx(lx, ly), y = sy(lx, ly), base = Math.max(7, R.S * 2.2);
     const pulse = 1 + Math.sin(performance.now() / 110) * .12;
     const rr2 = base * (1 + Math.min(1.2, tl) * .6) * pulse; // se resserre à l'approche
@@ -347,6 +350,9 @@ export function createRenderer(canvas) {
       ctx.font = `600 ${fs * .5}px ${FD}`; ctx.fillStyle = ui.net.ok ? 'rgba(127,217,154,.9)' : '#f0776b'; ctx.textAlign = 'left';
       ctx.fillText(ui.net.label, cx0 + cw + 10, y);
     }
+    // compteur d'images par seconde (option)
+    if (SET.fps) { const n = performance.now(); R.fc = (R.fc || 0) + 1; if (!R.ft || n - R.ft > 500) { R.fv = Math.round(R.fc * 1000 / (n - (R.ft || n - 500))); R.fc = 0; R.ft = n; }
+      ctx.font = `700 ${fs * .5}px ${FD}`; ctx.fillStyle = '#7fd99a'; ctx.textAlign = 'right'; ctx.fillText(`${R.fv || 0} IPS`, R.W - 58 - (ui.safeR || 0), y); }
     // bouton menu
     const mx = R.W - 28 - (ui.safeR || 0);
     ctx.fillStyle = 'rgba(238,243,234,.75)'; rr(mx - 7, y - 8, 5, 16, 1.5); ctx.fill(); rr(mx + 2, y - 8, 5, 16, 1.5); ctx.fill();
@@ -521,7 +527,7 @@ export function createRenderer(canvas) {
     return out;
   };
   R.goalBurst = (team, M) => {
-    R.shk = .45; R.net = { side: team === R.me ? 1 : 0, t: performance.now() }; R.goalT = performance.now();
+    R.shk = SET.shake ? .45 : 0; R.net = { side: team === R.me ? 1 : 0, t: performance.now() }; R.goalT = performance.now();
     const left = (team === R.me) ? false : true; // on marque à droite
     const gx = left ? R.OX : R.OX + FL * R.S, gy = R.OY + CX * R.S, out = [];
     for (let i = 0; i < 70; i++) out.push({ x: gx, y: gy + (Math.random() * 2 - 1) * GH * R.S, vx: (Math.random() * 2 - 1) * 220, vy: (Math.random() * 2 - 1) * 160, c: Math.random() < .5 ? M.kit[team].c1 : M.kit[team].c2, life: 1 + Math.random(), r: 2 + Math.random() * 2, rot: Math.random() * 6 });

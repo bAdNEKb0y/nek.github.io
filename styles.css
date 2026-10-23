@@ -439,3 +439,19 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .teams .tgrp:first-of-type{margin-top:2px}
 .fc .n.l{font-size:.86em;letter-spacing:-.01em}
 .fc .n.xl{font-size:.72em;letter-spacing:-.02em}
+/* Paramètres */
+.gear{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);display:grid;place-items:center;color:var(--chalk);flex:none}
+.gear svg{width:22px;height:22px}
+.gear:hover{background:rgba(255,255,255,.06)}
+.overlay.setov{z-index:9}
+.setbox{max-height:92%!important}
+.setsec{display:grid;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+.setsec h3{margin:0;font-family:var(--f-display);font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--flood)}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.setlab{font-weight:600;min-width:0;flex:1 1 160px}
+.setlab small{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:2px}
+.setrange{display:flex;align-items:center;gap:10px;flex:1 1 200px;max-width:320px}
+.setrange input{flex:1;accent-color:var(--flood);height:28px}
+.setrange b{min-width:54px;text-align:right;font-variant-numeric:tabular-nums}
+.setbtns{display:flex;gap:8px;flex-wrap:wrap}
+@media (max-width:480px){.setrow .chips{width:100%}.setrange{max-width:none}}
