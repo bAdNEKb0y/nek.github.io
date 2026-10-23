@@ -19,8 +19,27 @@ export const TEAMS=[
   {g:'Europe',name:'Juventus',short:'JUV',h:['#111111','#ffffff','stripes'],a:['#f2c100','#111111','solid'],att:81,pas:82,def:84,vit:79},
   {g:'Europe',name:'Inter Milan',short:'INT',h:['#0068a8','#111111','stripes'],a:['#ffffff','#0068a8','solid'],att:85,pas:84,def:85,vit:81},
   {g:'Europe',name:'AC Milan',short:'MIL',h:['#fb090b','#111111','stripes'],a:['#ffffff','#fb090b','solid'],att:83,pas:81,def:80,vit:84},
+  {g:'Europe',name:'Naples',short:'NAP',h:['#12a0d7','#ffffff','solid'],a:['#ffffff','#12a0d7','solid']},
+  {g:'Europe',name:'Tottenham',short:'TOT',h:['#ffffff','#132257','solid'],a:['#132257','#ffffff','solid']},
+  {g:'Europe',name:'Newcastle',short:'NEW',h:['#111111','#ffffff','stripes'],a:['#e8e3d3','#111111','solid']},
+  {g:'Europe',name:'Aston Villa',short:'AVL',h:['#670e36','#95bfe5','sleeves'],a:['#95bfe5','#670e36','solid']},
+  {g:'Europe',name:'Bayer Leverkusen',short:'B04',h:['#e32221','#111111','solid'],a:['#111111','#e32221','solid']},
+  {g:'Europe',name:'Benfica',short:'SLB',h:['#e2001a','#ffffff','solid'],a:['#ffffff','#e2001a','solid']},
+  {g:'Europe',name:'Sporting CP',short:'SCP',h:['#008057','#ffffff','stripes'],a:['#111111','#008057','solid']},
+  {g:'Nations',nat:1,name:'France',short:'FRA',h:['#1f3a93','#ffffff','solid'],a:['#ffffff','#1f3a93','solid']},
+  {g:'Nations',nat:1,name:'Brésil',short:'BRA',h:['#f7d117','#009c3b','solid'],a:['#1c3f94','#f7d117','solid']},
+  {g:'Nations',nat:1,name:'Argentine',short:'ARG',h:['#75aadb','#ffffff','stripes'],a:['#1d2b4f','#75aadb','solid']},
+  {g:'Nations',nat:1,name:'Portugal',short:'POR',h:['#c8102e','#006600','solid'],a:['#f2f2f2','#c8102e','solid']},
+  {g:'Nations',nat:1,name:'Espagne',short:'ESP',h:['#c60b1e','#ffc400','solid'],a:['#f2f2f2','#c60b1e','solid']},
+  {g:'Nations',nat:1,name:'Angleterre',short:'ENG',h:['#ffffff','#1d2b6b','solid'],a:['#c8102e','#ffffff','solid']},
+  {g:'Nations',nat:1,name:'Allemagne',short:'GER',h:['#f4f4f4','#111111','solid'],a:['#111111','#dd0000','solid']},
+  {g:'Nations',nat:1,name:'Italie',short:'ITA',h:['#0064aa','#ffffff','solid'],a:['#ffffff','#0064aa','solid']},
+  {g:'Nations',nat:1,name:'Pays-Bas',short:'NED',h:['#f36c21','#111111','solid'],a:['#1d2b6b','#f36c21','solid']},
+  {g:'Nations',nat:1,name:'Belgique',short:'BEL',h:['#e30613','#111111','solid'],a:['#ffffff','#e30613','solid']},
+  {g:'Nations',nat:1,name:'Maroc',short:'MAR',h:['#c1272d','#006233','solid'],a:['#ffffff','#c1272d','solid']},
+  {g:'Nations',nat:1,name:'Croatie',short:'CRO',h:['#ffffff','#e30a17','stripes'],a:['#1d2b6b','#ffffff','solid']},
 ];
-TEAMS.forEach((t,i)=>{t.id=i;t.ovr=Math.round((t.att+t.pas+t.def+t.vit)/4);t.c1=t.h[0];t.c2=t.h[1]});
+TEAMS.forEach((t,i)=>{t.id=i;t.c1=t.h[0];t.c2=t.h[1]});
 export const KIT=k=>({c1:k[0],c2:k[1],p:k[2]});
 /* Effectifs : gardien, 2 défenseurs, 2 attaquants — [nom, numéro, note] (notes estimées, pas celles de FIFA) */
 const SQUADS={
@@ -43,9 +62,32 @@ const SQUADS={
   JUV:[['Di Gregorio',29,84],['Bremer',3,85],['Kalulu',15,81],['Yıldız',10,86],['Vlahović',9,84]],
   INT:[['Sommer',1,86],['Bastoni',95,87],['Acerbi',15,82],['Lautaro',10,89],['Thuram',9,86]],
   MIL:[['Maignan',16,87],['Tomori',23,82],['Gabbia',46,80],['Pulisic',11,85],['Leão',10,86]],
+  NAP:[['Meret',1,82],['Di Lorenzo',22,84],['Buongiorno',4,83],['McTominay',8,86],['Højlund',19,82]],
+  TOT:[['Vicario',1,83],['Romero',17,85],['Van de Ven',37,84],['Kudus',20,83],['Richarlison',9,80]],
+  NEW:[['Pope',1,84],['Botman',4,82],['Trippier',2,81],['Gordon',10,84],['Woltemade',27,82]],
+  AVL:[['E. Martínez',23,86],['Konsa',4,83],['Pau Torres',14,82],['Rogers',8,84],['Watkins',11,84]],
+  B04:[['Flekken',1,82],['Tapsoba',12,82],['Grimaldo',20,84],['Schick',14,83],['Hofmann',7,80]],
+  SLB:[['Trubin',1,83],['António Silva',4,82],['Otamendi',30,81],['Pavlidis',14,83],['Sudakov',10,81]],
+  SCP:[['Rui Silva',1,81],['Diomande',26,82],['Gonçalo Inácio',25,81],['Trincão',17,84],['L. Suárez',97,82]],
+  /* Sélections nationales (jouables, pas de cartes en double) */
+  FRA:[['Maignan',16,87],['Saliba',17,88],['Koundé',5,86],['Mbappé',10,91],['Dembélé',7,91]],
+  BRA:[['Alisson',1,89],['Marquinhos',4,85],['Gabriel',3,87],['Vinícius Jr',7,89],['Raphinha',11,89]],
+  ARG:[['E. Martínez',23,86],['Romero',13,85],['L. Martínez',25,82],['Messi',10,98],['J. Álvarez',9,87]],
+  POR:[['Diogo Costa',1,86],['Rúben Dias',4,87],['Nuno Mendes',25,87],['B. Fernandes',8,86],['C. Ronaldo',7,99]],
+  ESP:[['Unai Simón',23,85],['Cubarsí',22,85],['Huijsen',24,84],['Lamine Yamal',19,91],['Nico Williams',17,86]],
+  ENG:[['Pickford',1,84],['Guéhi',6,83],['Stones',5,83],['Kane',9,91],['Saka',7,89]],
+  GER:[['Ter Stegen',22,86],['Rüdiger',2,85],['Tah',4,85],['Musiala',10,89],['Wirtz',17,88]],
+  ITA:[['Donnarumma',1,88],['Bastoni',23,87],['Calafiori',5,82],['Barella',18,87],['Retegui',9,82]],
+  NED:[['Verbruggen',1,81],['Van Dijk',4,89],['De Ligt',3,82],['Gakpo',11,85],['Simons',7,83]],
+  BEL:[['Courtois',1,89],['Faes',4,80],['Castagne',21,78],['De Bruyne',7,87],['Doku',11,84]],
+  MAR:[['Bounou',1,85],['Hakimi',2,88],['Aguerd',5,80],['Brahim Díaz',10,84],['En-Nesyri',19,81]],
+  CRO:[['Livaković',1,82],['Gvardiol',4,85],['Šutalo',6,79],['Modrić',10,85],['Kramarić',9,80]],
 };
 export const POS=['GB','DEF','DEF','ATT','ATT'];
-TEAMS.forEach(t=>{t.sq=SQUADS[t.short];t.star=t.sq.slice().sort((a,b)=>b[2]-a[2])[0]});
+TEAMS.forEach(t=>{t.sq=SQUADS[t.short];t.star=t.sq.slice().sort((a,b)=>b[2]-a[2])[0];
+  if(t.att==null){const r=t.sq.map(q=>q[2]),avg=a=>Math.round(a.reduce((x,y)=>x+y,0)/a.length);
+    t.att=avg([r[3],r[4]]);t.def=avg([r[0],r[1],r[2]]);t.pas=avg(r);t.vit=avg([r[1],r[2],r[3],r[3],r[4],r[4]])-1;}
+  t.ovr=Math.round((t.att+t.pas+t.def+t.vit)/4)});
 
 /* ---------- Cartes à collectionner (packs) ---------- */
 export const LEGENDS=[
@@ -86,7 +128,7 @@ export const TIER_NAME={or:'Or',rare:'Rare',elite:'Élite',leg:'Légende',goat:'
 export const TRANK={or:0,rare:1,elite:2,leg:3,goat:4};
 export const CARDS={}, CARD_LIST=[];
 const addCard=c=>{c.tier=tierOf(c);CARDS[c.id]=c;CARD_LIST.push(c)};
-TEAMS.forEach(t=>t.sq.forEach((q,i)=>addCard({id:t.short+'-'+i,name:q[0],num:q[1],r:q[2],pos:POS[i],club:t.short,kit:t.h})));
+TEAMS.filter(t=>!t.nat).forEach(t=>t.sq.forEach((q,i)=>addCard({id:t.short+'-'+i,name:q[0],num:q[1],r:q[2],pos:POS[i],club:t.short,kit:t.h})));
 STARS.forEach((q,i)=>{const ci=clubInfo(q[4]);addCard({id:'STAR-'+i,name:q[0],num:q[1],pos:q[2],r:q[3],club:ci.n,kit:ci.k})});
 LEGENDS.forEach((l,i)=>addCard({id:'LEG-'+i,name:l[0],num:l[1],pos:l[2],r:l[3],club:'Légende',kit:l[4],leg:true}));
 ULTIMES.forEach((q,i)=>{const ci=clubInfo(q[4]);addCard({id:'ULT-'+i,name:q[0],num:q[1],pos:q[2],r:q[3],club:ci.n,kit:ci.k,goat:true})});

@@ -432,3 +432,8 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
   .tart{grid-row:2/5}
   .tbox h2{font-size:24px}.tbox p{font-size:14px}
 }
+/* Manette : focus bien visible pour naviguer dans les menus */
+.pad :focus{outline:3px solid #ffc94a!important;outline-offset:3px;box-shadow:0 0 0 7px rgba(255,201,74,.22)}
+.pad .screen.game{cursor:none}
+.teams .tgrp{grid-column:1/-1;margin:8px 2px 0;font:800 .78rem/1 'Saira Extra Condensed','Arial Narrow',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--flood,#ffc94a)}
+.teams .tgrp:first-of-type{margin-top:2px}

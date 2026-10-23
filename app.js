@@ -1,6 +1,7 @@
 import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, customTeam } from './data.js';
 import { predictOwn } from './predict.js';
 import { openTuto, tutoSeen } from './tuto.js';
+import { PAD, initPad, pollPad, rumble, padLabels } from './gamepad.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
@@ -21,7 +22,7 @@ let AC = null;
 function audio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch { AC = null; } } if (AC && AC.state === 'suspended') AC.resume().catch(() => { }); return AC; }
 function tone(f, dur, type, vol, f2, delay) { const a = AC; if (!a) return; try { const t0 = a.currentTime + (delay || 0); const o = a.createOscillator(), g = a.createGain(); o.type = type || 'sine'; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur); g.gain.setValueAtTime(vol || .15, t0); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur); o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur + .02); } catch { } }
 function cheer() { const a = AC; if (!a) return; try { const len = a.sampleRate * 1.8, buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.min(1, i / (a.sampleRate * .15)) * Math.pow(1 - i / len, 1.4); const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = .7; g.gain.value = .35; s.buffer = buf; s.connect(f); f.connect(g); g.connect(a.destination); s.start(); } catch { } }
-const buzz = ms => { try { navigator.vibrate?.(ms); } catch { } };
+const buzz = ms => { try { navigator.vibrate?.(ms); } catch { } if (PAD.on) { const t = Array.isArray(ms) ? ms.reduce((a, b) => a + b, 0) : ms; rumble(Math.max(40, t), t > 100 ? 1 : .55, .5); } };
 setPackSounds({ tone, cheer, buzz });
 initPackOverlay();
 function playEvent(type, val) {
@@ -325,7 +326,7 @@ function renderLobby() {
   const g = $('#teamGrid');
   const mine = COL ? customTeam(COL.team) : null;
   g.innerHTML = (mine ? `<button class="tm mine" data-t="-1" aria-pressed="${LOB.team === -1}" ${LOB.ready ? 'disabled' : ''}>${shirtSVG(mine.h)}<b>${esc(mine.short)}</b><small>${esc(mine.name)}</small><span class="o">${mine.ovr}</span></button>` : '')
-    + TEAMS.map((t, i) => `<button class="tm" data-t="${i}" aria-pressed="${LOB.team === i}" ${LOB.ready ? 'disabled' : ''}>${shirtSVG(t.h)}<b>${esc(t.short)}</b><small>${esc(t.name)}</small><span class="o">${t.ovr}</span></button>`).join('');
+    + TEAMS.map((t, i) => `${i === 0 || TEAMS[i - 1].g !== t.g ? `<h4 class="tgrp">${t.g === 'Nations' ? 'Sélections nationales' : t.g === 'France' ? 'Ligue 1' : 'Clubs européens'}</h4>` : ''}<button class="tm" data-t="${i}" aria-pressed="${LOB.team === i}" ${LOB.ready ? 'disabled' : ''}>${shirtSVG(t.h)}<b>${esc(t.short)}</b><small>${esc(t.name)}</small><span class="o">${t.ovr}</span></button>`).join('');
   g.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { LOB.team = +b.dataset.t; ROOM.setState({ team: LOB.team }); renderLobby(); });
   const rb = $('#bReady');
   rb.textContent = LOB.ready ? 'Annuler' : 'Je suis prêt';
@@ -533,10 +534,35 @@ addEventListener('keyup', e => {
   if (e.code === 'KeyJ' || e.code === 'KeyF') aRelease();
   if ((e.code === 'KeyK' || e.code === 'KeyG' || e.code === 'Space') && LI.bDown) { LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
 });
+/* Manette */
+function bPress() { if (LI.bDown) return; LI.bDown = true; LI.b++; }
+function bRelease() { if (!LI.bDown) return; LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
+function closeTop() {
+  if (!$('#menu').hidden) { $('#menu').hidden = true; return true; }
+  for (const id of ['tuto', 'pack', 'picker']) {
+    const o = $('#' + id); if (o.hidden) continue;
+    const b = o.querySelector('[data-t="skip"],[data-a="close"],#pkClose');
+    if (b) b.click(); else if (id !== 'pack') o.hidden = true;
+    return true;
+  }
+  return false;
+}
+initPad({
+  inGame: () => !!GAME && !GAME.done && !$('#game').hidden && $('#menu').hidden,
+  aDown: () => { audio(); aPress(); }, aUp: () => aRelease(),
+  bDown: () => { audio(); bPress(); }, bUp: () => bRelease(),
+  lob: () => { audio(); if (myBall()) { LI.l++; LI.aFlash = .15; buzz([10, 30, 18]); } else { LI.a++; LI.aFlash = .15; } },
+  swap: () => { if (!myBall()) { LI.a++; LI.aFlash = .15; } },
+  menu: () => openMenu(),
+  back: () => { if (closeTop()) return; const h = document.querySelector('.screen:not([hidden]) [data-home]'); if (h) h.click(); },
+  start: () => { if (!$('#menu').hidden) $('#menu').hidden = true; },
+  onJoin: p => { const L = padLabels(); toast(`🎮 Manette détectée · ${L.A} passe · ${L.X} en l'air · ${L.B} tir · ${L.LB} changer`); },
+  onLeave: () => toast('Manette déconnectée'),
+});
 /** Entrée locale en coordonnées terrain */
 function localWorldInput() {
-  let u = LI.tx + ((KEYS.KeyD || KEYS.ArrowRight) ? 1 : 0) - ((KEYS.KeyA || KEYS.ArrowLeft) ? 1 : 0);
-  let v = LI.ty + ((KEYS.KeyS || KEYS.ArrowDown) ? 1 : 0) - ((KEYS.KeyW || KEYS.ArrowUp) ? 1 : 0);
+  let u = LI.tx + PAD.x + ((KEYS.KeyD || KEYS.ArrowRight) ? 1 : 0) - ((KEYS.KeyA || KEYS.ArrowLeft) ? 1 : 0);
+  let v = LI.ty + PAD.y + ((KEYS.KeyS || KEYS.ArrowDown) ? 1 : 0) - ((KEYS.KeyW || KEYS.ArrowUp) ? 1 : 0);
   const m = Math.hypot(u, v); if (m > 1) { u /= m; v /= m; }
   const [jx, jy] = R.toWorld(u, v);
   return { jx, jy, m: Math.min(1, m), a: LI.a, l: LI.l, b: LI.b, d: LI.bDown, r: LI.rel, rc: LI.relCharge };
@@ -609,6 +635,7 @@ let last = performance.now();
 const STEP = 1 / 60;
 function frame(now) {
   const dt = Math.min(.1, (now - last) / 1000); last = now;
+  pollPad(now);
   const g = GAME;
   if (g && !g.done) {
     LI.aFlash = Math.max(0, LI.aFlash - dt);
@@ -661,7 +688,7 @@ function frame(now) {
     if (g.online && g.side === 0 && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
     if (g.online && g.side === 1 && !ROOM?.peer && g.V) overlay = `${g.names[0]} s'est déconnecté…`;
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
-    R.draw(g.V, g.M, { me: g.side, input: LI, localCharge: g.localCharge, parts: g.parts, overlay, net });
+    R.draw(g.V, g.M, { me: g.side, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
   }
   requestAnimationFrame(frame);
 }
