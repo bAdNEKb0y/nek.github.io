@@ -646,3 +646,14 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 #tFriends .friend b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .netpill.ok{color:var(--win)}
 @media (max-width:420px){.tsides{grid-template-columns:minmax(0,1fr)}.tsides .vsx{justify-self:center;font-size:16px}}
+
+/* ---------- Défilement : un seul niveau de défilement par écran ---------- */
+.teams{max-height:none;overflow:visible}
+/* Messagerie : la conversation prend la place, les messages rapides ont leur propre zone en bas */
+#chat .setbox.chatbox{display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;overflow:hidden;touch-action:auto}
+#chat .msgs{min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+#chat .qmsgs{max-height:min(34vh,240px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;align-content:flex-start}
+#chat .chatbox>.hint{padding-bottom:max(8px,env(safe-area-inset-bottom))}
+@media (max-height:500px){#chat .qmsgs{max-height:30vh;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding-bottom:6px}#chat .qmsgs .chip{flex:none}}
+.screen,.sheet .box,.setov .setbox,.tbox,.pk-stage.wide{-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+@media (max-height:500px){#chat .qmsgs{-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);padding-right:40px}}

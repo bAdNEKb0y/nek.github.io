@@ -18,7 +18,7 @@ const teamIdx = short => Math.max(0, TEAMS.findIndex(t => t.short === short));
 
 /* ---------- Écrans ---------- */
 const SCREENS = ['auth', 'home', 'club', 'shop', 'lobby', 'tlobby', 'pduel', 'game', 'end'];
-function show(id) { SCREENS.forEach(s => { $('#' + s).hidden = s !== id; }); }
+function show(id) { SCREENS.forEach(s => { const el = $('#' + s), was = el.hidden; el.hidden = s !== id; if (s === id && was) el.scrollTop = 0; }); } // nouvel écran : on repart du haut
 let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 
