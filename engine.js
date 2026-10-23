@@ -520,7 +520,7 @@ function goalScored(G, t) {
   // Beau but : reprise, retournée, tête, frappe de loin ou lob -> pause plus longue pour le ralenti 3D
   const dist = b.ky == null ? 0 : (t === 0 ? b.ky : FL - b.ky);
   const beau = !own && !!sc && (['volley', 'bicycle', 'header'].includes(b.spec) || dist >= 24 || (b.maxz || 0) > 2.8);
-  G.state = 'goal'; G.stateT = beau ? 6.2 : 2.8; G.nextKick = 1 - t; G.passTarget = null;
+  G.state = 'goal'; G.stateT = 2.8; G.nextKick = 1 - t; G.passTarget = null;
   ev(G, 'goal', { t });
   if (beau) ev(G, 'beau', { n: b.spec === 'bicycle' ? 3 : b.spec === 'volley' ? 2 : 1 });
   banner(G, 'BUT !', own ? `Contre son camp · ${sc ? sc.name : ''}` : `${sc ? sc.name : G.team[t].name} · ${clockMin(G)}'`, 2.6, t);

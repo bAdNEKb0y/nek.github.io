@@ -2,7 +2,6 @@ import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, custo
 import { predictOwn } from './predict.js';
 import { openTuto, tutoSeen } from './tuto.js';
 import { PAD, initPad, pollPad, rumble, padLabels } from './gamepad.js';
-import { preload3D, ready3D, play3D } from './replay3d.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
@@ -611,7 +610,7 @@ function beginGame({ cfg, side, online, names, uids }) {
   g.onSnap = d => { const now = performance.now(); g.lastSnapAt = now; if (g.snaps.length && d.q <= g.snaps[g.snaps.length - 1].q) return; g.snaps.push({ at: now, q: d.q, s: d.s }); if (g.snaps.length > 30) g.snaps.shift(); };
   g.onEnd = d => { if (!g.done) finishGame(d); };
   g.forfeit = (iWin, msg) => { if (g.done) return; const sc = iWin ? [3, 0] : [0, 3]; finishGame({ forfeit: true, msg, score: side === 0 ? sc : [sc[1], sc[0]] }); };
-  GAME = g; R.me = side; preload3D();
+  GAME = g; R.me = side;
   show('game'); $('#menu').hidden = true;
   R.resize(); requestAnimationFrame(() => R.resize());
   keepAwake();
@@ -640,20 +639,9 @@ function startReplay(g, now) {
   if (fr.length < 8) return;
   g.replay = { frames: fr.slice(), t0: fr[0].at, goalAt: now, start: now + RP_DELAY, dur: (fr[fr.length - 1].at - fr[0].at) / RP_SPEED };
 }
-/** Beau but : ralenti en 3D (si Three.js est prêt), sinon ralenti 2D classique */
-function tick3D(g, now) {
-  const r = g.replay; if (!r || !r.beau || r.r3d || now < r.start) return;
-  const fr = g.hist.filter(h => h.at >= r.goalAt - 2800 && h.at <= r.goalAt + 650);
-  const sc = g.G ? g.G.scorers[g.G.scorers.length - 1] : null;
-  const scorer = sc ? `${sc.name} · ${sc.min}'` : (g.V?.bn && g.V.bn[1] === 'BUT !' ? g.V.bn[2] : '');
-  const title = r.beau === 3 ? 'RETOURNÉE DE FOLIE !' : r.beau === 2 ? 'QUELLE VOLÉE !' : 'BUT MAGNIFIQUE !';
-  r.r3d = play3D({ host: $('#game'), frames: fr, M: g.M, scorer, title, onEnd: () => { if (g.replay === r) g.replay = null; } });
-  if (!r.r3d) r.beau = 0; // échec WebGL : ralenti 2D
-}
-function stopReplay(g) { if (!g?.replay) return; const r = g.replay; g.replay = null; r.r3d?.stop(); }
+function stopReplay(g) { if (g) g.replay = null; }
 function replayFrame(g, now) {
   const r = g.replay; if (!r) return null;
-  if (r.beau) { if (g.V && g.V.st === 'play') stopReplay(g); return null; }
   if (now < r.start) return null;
   const k = now - r.start;
   if (k > r.dur || (g.V && g.V.st === 'play')) { g.replay = null; return null; }
@@ -711,7 +699,6 @@ function frame(now) {
         if (s <= g.lastEv) continue;
         g.lastEv = s; playEvent(type, val);
         if (type === 'goal') { g.parts.push(...R.goalBurst(val, g.M)); startReplay(g, now); }
-        if (type === 'beau' && g.replay && ready3D()) g.replay.beau = val || 1;
         if (type === 'bicycle' || type === 'volley') g.parts.push(...R.burstAt(g.V, g.M));
         if (type === 'kick' && val >= 1.1) g.parts.push(...R.grassAt(g.V));
       }
@@ -723,7 +710,6 @@ function frame(now) {
     if (g.online && g.side === 0 && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
     if (g.online && g.side === 1 && !ROOM?.peer && g.V) overlay = `${g.names[0]} s'est déconnecté…`;
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
-    tick3D(g, now);
     const rp = replayFrame(g, now);
     R.draw(rp || g.V, g.M, { me: g.side, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
   }
