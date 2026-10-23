@@ -437,3 +437,5 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .pad .screen.game{cursor:none}
 .teams .tgrp{grid-column:1/-1;margin:8px 2px 0;font:800 .78rem/1 'Saira Extra Condensed','Arial Narrow',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--flood,#ffc94a)}
 .teams .tgrp:first-of-type{margin-top:2px}
+.fc .n.l{font-size:.86em;letter-spacing:-.01em}
+.fc .n.xl{font-size:.72em;letter-spacing:-.02em}

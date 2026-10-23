@@ -269,10 +269,16 @@ export function createRenderer(canvas) {
       ctx.fillStyle = c; ctx.strokeStyle = 'rgba(8,12,10,.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(x - r * .55, ay - r * .55); ctx.lineTo(x + r * .55, ay - r * .55); ctx.lineTo(x, ay + r * .1); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
-    if (ctrl || V.b[3] === i) {
-      const nm = meta.name.toUpperCase(), fz = Math.max(9, r * .8);
+    if (ctrl || V.b[3] === i) LABELS.push([i, x, y, r, ctrl]);
+  }
+  /** Étiquettes nom + jauge de tir, dessinées après tous les joueurs pour rester lisibles */
+  const LABELS = [];
+  function drawLabel(V, M, [i, x, y, r, ctrl]) {
+    const meta = M.players[i], t = meta.t;
+    {
+      const nm = `${meta.num} · ${meta.name.toUpperCase()}`, fz = Math.max(9, r * .8);
       ctx.font = `700 ${fz}px ${FD}`; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
-      const w = ctx.measureText(nm).width, ly = y + r * 1.5;
+      const w = ctx.measureText(nm).width, ly = ctrl ? y + r * 1.5 : y - r * 2.1 - fz - 4; // porteur adverse : étiquette au-dessus
       ctx.fillStyle = 'rgba(6,12,10,.75)'; rr(x - w / 2 - 5, ly, w + 10, fz + 4, 3); ctx.fill();
       ctx.fillStyle = ctrl ? SIDE_COL[t] : M.kit[t].c1 === '#ffffff' ? CHALK : CHALK; ctx.fillRect(x - w / 2 - 5, ly, 2.5, fz + 4);
       ctx.fillStyle = ctrl ? SIDE_COL[t] : CHALK; ctx.fillText(nm, x + 1, ly + 2);
@@ -422,12 +428,50 @@ export function createRenderer(canvas) {
       x = bx - rad - 18;
     }
   }
+  /** Ralenti : bandes cinéma + pastille « RALENTI » */
+  function drawReplay(V) {
+    const k = Math.max(0, Math.min(1, V.rp ?? 1)), bh = Math.round(R.H * .07 * k);
+    ctx.fillStyle = 'rgba(0,0,0,.85)'; ctx.fillRect(0, R.hud, R.W, bh); ctx.fillRect(0, R.H - bh, R.W, bh);
+    ctx.globalAlpha = k;
+    const fz = Math.max(14, Math.min(22, R.H * .045)), x = 16, y = R.hud + bh + 12;
+    ctx.font = `800 ${fz}px ${FD}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    const w = ctx.measureText('RALENTI').width + fz * 1.6;
+    ctx.fillStyle = '#f0776b'; rr(x, y, w, fz * 1.5, 4); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + fz * .55, y + fz * .75, fz * .22, 0, Math.PI * 2); ctx.fill();
+    ctx.fillText('RALENTI', x + fz * 1.05, y + fz * .78);
+    ctx.font = `600 ${fz * .7}px ${FD}`; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(238,243,234,.75)';
+    ctx.fillText('Touche l\'écran pour passer', R.W / 2, R.H - bh / 2);
+    ctx.globalAlpha = 1;
+  }
+  /** Radar façon FIFA : tout le terrain en miniature (quand la caméra suit le ballon) */
+  function drawRadar(V, M) {
+    const w = clamp(R.W * .15, 100, 180), h = w * FW / FL, x0 = (R.W - w) / 2, y0 = R.H - h - 10;
+    ctx.fillStyle = 'rgba(6,14,10,.72)'; rr(x0 - 4, y0 - 4, w + 8, h + 8, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(238,243,234,.45)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, w, h); ctx.beginPath(); ctx.moveTo(x0 + w / 2, y0); ctx.lineTo(x0 + w / 2, y0 + h); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x0 + w / 2, y0 + h / 2, h * .14, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeRect(x0, y0 + h * (1 - 36 / FW) / 2, w * .14, h * 36 / FW); ctx.strokeRect(x0 + w * .86, y0 + h * (1 - 36 / FW) / 2, w * .14, h * 36 / FW);
+    // zone visible à l'écran
+    const vt = clamp((R.hud - R.OY) / (FW * R.S), 0, 1), vb = clamp((R.H - R.OY) / (FW * R.S), 0, 1);
+    ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x0, y0 + vt * h, w, (vb - vt) * h);
+    const P = (wx, wy) => R.me === 0 ? [x0 + (FL - wy) / FL * w, y0 + wx / FW * h] : [x0 + wy / FL * w, y0 + (FW - wx) / FW * h];
+    V.p.forEach((pd, i) => {
+      const m = M.players[i], [px, py] = P(pd[0], pd[1]), c = V.c[m.t] === i && M.humans[m.t];
+      ctx.fillStyle = m.gk ? GK_COL[m.t] : SIDE_COL[m.t];
+      ctx.beginPath(); ctx.arc(px, py, c ? 4 : 2.8, 0, Math.PI * 2); ctx.fill();
+      if (c) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
+    });
+    const [bx, by] = P(V.b[0], V.b[1]);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0b1411'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bx, by, 2.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
   function drawBtn(x, y, r, label, on, col, charge) {
     ctx.fillStyle = on ? col : 'rgba(6,12,10,.35)'; ctx.strokeStyle = col; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     if (charge > 0) { ctx.strokeStyle = label === 'EN L\'AIR' ? '#ffe08a' : charge > .85 ? '#f0776b' : '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + charge * Math.PI * 2); ctx.stroke(); }
     ctx.fillStyle = on ? '#0b1411' : col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `800 ${Math.min(r * .5, label.length > 6 ? r * .4 : 24)}px ${FD}`; ctx.fillText(label, x, y + 1);
+    let fz = Math.min(r * .5, 24); ctx.font = `800 ${fz}px ${FD}`;
+    const tw = ctx.measureText(label).width; if (tw > r * 1.62) { fz *= r * 1.62 / tw; ctx.font = `800 ${fz}px ${FD}`; }
+    ctx.fillText(label, x, y + 1);
   }
 
   function drawBanner(V, M) {
@@ -468,12 +512,16 @@ export function createRenderer(canvas) {
     drawPitch();
     const order = V.p.map((p, i) => i).sort((a, b) => sy(V.p[a][0], V.p[a][1]) - sy(V.p[b][0], V.p[b][1]));
     drawLanding(V);
+    LABELS.length = 0;
     for (const i of order) drawPlayer(V, M, i);
     drawBall(V);
+    for (const L of LABELS) drawLabel(V, M, L);
     for (const q of ui.parts || []) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.globalAlpha = Math.min(1, q.life); ctx.fillStyle = q.c; ctx.fillRect(-q.r, -q.r / 2, q.r * 2, q.r); ctx.restore(); }
     drawBanner(V, M);
+    if (ui.replay) drawReplay(V);
+    else if (R.follow) drawRadar(V, M);
     drawHUD(V, M, ui);
-    drawControls(V, M, ui);
+    if (!ui.replay) drawControls(V, M, ui);
     if (ui.overlay) {
       ctx.fillStyle = 'rgba(6,12,10,.7)'; ctx.fillRect(0, R.hud, R.W, R.H - R.hud);
       ctx.fillStyle = CHALK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${Math.min(42, R.W * .05)}px ${FD}`;

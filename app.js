@@ -501,6 +501,7 @@ function xy(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.lef
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); audio();
   if (!document.fullscreenElement && matchMedia('(pointer:coarse)').matches) goFull();
+  if (GAME?.replay && performance.now() >= GAME.replay.start) { GAME.replay = null; return; }
   const [x, y] = xy(e), k = hit(x, y);
   if (!k) return;
   if (k === 'M') { openMenu(); return; }
@@ -526,7 +527,7 @@ addEventListener('keydown', e => {
   KEYS[e.code] = true; audio();
   if ((e.code === 'KeyJ' || e.code === 'KeyF') && !e.repeat) aPress();
   if (e.code === 'KeyK' || e.code === 'KeyG' || e.code === 'Space') { LI.bDown = true; LI.b++; }
-  if (e.code === 'Escape') openMenu();
+  if (e.code === 'Escape') { if ($('#menu').hidden) openMenu(); else $('#menu').hidden = true; }
   if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
 });
 addEventListener('keyup', e => {
@@ -549,7 +550,7 @@ function closeTop() {
 }
 initPad({
   inGame: () => !!GAME && !GAME.done && !$('#game').hidden && $('#menu').hidden,
-  aDown: () => { audio(); aPress(); }, aUp: () => aRelease(),
+  aDown: () => { audio(); if (GAME?.replay && performance.now() >= GAME.replay.start) { GAME.replay = null; return; } aPress(); }, aUp: () => aRelease(),
   bDown: () => { audio(); bPress(); }, bUp: () => bRelease(),
   lob: () => { audio(); if (myBall()) { LI.l++; LI.aFlash = .15; buzz([10, 30, 18]); } else { LI.a++; LI.aFlash = .15; } },
   swap: () => { if (!myBall()) { LI.a++; LI.aFlash = .15; } },
@@ -631,6 +632,23 @@ function interp(snaps, now) {
     b: [lerp(A.b[0], B.b[0]), lerp(A.b[1], B.b[1]), B.b[2], B.b[3], B.b[4], lerp(A.b[5] || 0, B.b[5] || 0), B.b[6] ?? -1, B.b[7] ?? -1, B.b[8] ?? 0], tm: lerp(A.tm, B.tm) };
 }
 
+/* Ralenti du but : on garde les ~2,3 s avant le but et on les rejoue pendant la pause (2,8 s + coup d'envoi) */
+const RP_DELAY = 900, RP_SPEED = .62;
+function startReplay(g, now) {
+  const fr = (g.hist || []).filter(h => now - h.at <= 2300);
+  if (fr.length < 20) return;
+  g.replay = { frames: fr.slice(), t0: fr[0].at, start: now + RP_DELAY, dur: (fr[fr.length - 1].at - fr[0].at) / RP_SPEED };
+}
+function replayFrame(g, now) {
+  const r = g.replay; if (!r) return null;
+  if (now < r.start) return null;
+  const k = now - r.start;
+  if (k > r.dur || (g.V && g.V.st === 'play')) { g.replay = null; return null; }
+  const t = r.t0 + k * RP_SPEED, F = r.frames;
+  let i = 0; while (i < F.length - 1 && F[i + 1].at <= t) i++;
+  const V = F[i].V;
+  return { ...V, sc: g.V?.sc || V.sc, ev: [], bn: null, rp: Math.min(1, k / 250, (r.dur - k) / 250) };
+}
 let last = performance.now();
 const STEP = 1 / 60;
 function frame(now) {
@@ -669,6 +687,8 @@ function frame(now) {
       if (now - g.lastSnapAt > 15000 && !ROOM?.peer) g.forfeit(true, 'Ton adversaire s\'est déconnecté.');
       if (g.V?.end && !g.endTimer) g.endTimer = setTimeout(() => { if (!g.done) finishGame({ score: g.V.sc, partial: true }); }, 3000);
     }
+    // Historique des 3 dernières secondes (pour le ralenti des buts)
+    if (g.V) { (g.hist ||= []).push({ at: now, V: g.V }); while (g.hist.length && now - g.hist[0].at > 3000) g.hist.shift(); }
     // Charge du tir affichée localement
     if (g.V) {
       const hasBall = g.V.b[3] >= 0 && g.V.b[3] === g.V.c[g.side];
@@ -677,7 +697,7 @@ function frame(now) {
       for (const [s, type, val] of g.V.ev || []) {
         if (s <= g.lastEv) continue;
         g.lastEv = s; playEvent(type, val);
-        if (type === 'goal') g.parts.push(...R.goalBurst(val, g.M));
+        if (type === 'goal') { g.parts.push(...R.goalBurst(val, g.M)); startReplay(g, now); }
         if (type === 'bicycle' || type === 'volley') g.parts.push(...R.burstAt(g.V, g.M));
       }
     }
@@ -688,7 +708,8 @@ function frame(now) {
     if (g.online && g.side === 0 && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
     if (g.online && g.side === 1 && !ROOM?.peer && g.V) overlay = `${g.names[0]} s'est déconnecté…`;
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
-    R.draw(g.V, g.M, { me: g.side, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
+    const rp = replayFrame(g, now);
+    R.draw(rp || g.V, g.M, { me: g.side, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
   }
   requestAnimationFrame(frame);
 }
