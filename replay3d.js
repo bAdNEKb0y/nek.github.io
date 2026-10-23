@@ -131,13 +131,18 @@ export function play3D({ host, frames, M, scorer, title, onEnd }) {
 
   // Joueurs : corps (maillot), short, tête, cheveux
   const bodyG = geo(new T.CapsuleGeometry(.6, 1.2, 4, 12)), shortG = geo(new T.CylinderGeometry(.62, .58, .55, 14)), headG = geo(new T.SphereGeometry(.38, 16, 12)), hairG = geo(new T.SphereGeometry(.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2));
+  const legG = geo(new T.CylinderGeometry(.2, .17, .95, 10)), bootG = geo(new T.BoxGeometry(.34, .2, .55));
   const players = M.players.map((m, i) => {
-    const kit = M.kit[m.t], look = lookFor(m.name), g = new T.Group();
-    const body = new T.Mesh(bodyG, mat({ color: m.gk ? GK_COL[m.t] : kit.c1, roughness: .7 })); body.position.y = 1.35; body.castShadow = true; g.add(body);
-    const sh = new T.Mesh(shortG, mat({ color: m.gk ? '#1b1f1d' : kit.c2, roughness: .8 })); sh.position.y = .55; sh.castShadow = true; g.add(sh);
-    const head = new T.Mesh(headG, mat({ color: look.skin, roughness: .8 })); head.position.y = 2.75; head.castShadow = true; g.add(head);
-    if (look.hair) { const hr = new T.Mesh(hairG, mat({ color: look.hair, roughness: .9 })); hr.position.y = 2.8; hr.scale.setScalar(look.style === 10 || look.style === 2 ? 1.18 : 1); g.add(hr); }
-    scene.add(g); return { g, body };
+    const kit = M.kit[m.t], look = lookFor(m.name), g = new T.Group(), pv = new T.Group(); // pv = pivot aux hanches (retournée)
+    pv.position.y = 1.4; g.add(pv);
+    const add = (mesh, y) => { mesh.position.y = y - 1.4; mesh.castShadow = true; pv.add(mesh); return mesh; };
+    const sockM = mat({ color: m.gk ? '#1b1f1d' : kit.c2, roughness: .8 }), bootM = mat({ color: look.boot, roughness: .5 });
+    const legs = [-1, 1].map(s => { const lg = new T.Group(); lg.position.set(s * .27, .95 - 1.4, 0); const leg = new T.Mesh(legG, sockM); leg.position.y = -.47; leg.castShadow = true; const bt = new T.Mesh(bootG, bootM); bt.position.set(0, -.92, .12); lg.add(leg, bt); pv.add(lg); return lg; });
+    add(new T.Mesh(bodyG, mat({ color: m.gk ? GK_COL[m.t] : kit.c1, roughness: .7 })), 1.6);
+    add(new T.Mesh(shortG, mat({ color: m.gk ? '#1b1f1d' : kit.c2, roughness: .8 })), 1.05);
+    add(new T.Mesh(headG, mat({ color: look.skin, roughness: .8 })), 3.0);
+    if (look.hair) { const hr = add(new T.Mesh(hairG, mat({ color: look.hair, roughness: .9 })), 3.05); hr.scale.setScalar(look.style === 10 || look.style === 2 ? 1.18 : 1); }
+    scene.add(g); return { g, pv, legs, ph: Math.random() * 6 };
   });
   const btex = ballTexture(); disposables.push(btex);
   const ball = new T.Mesh(geo(new T.SphereGeometry(.42, 24, 16)), mat({ map: btex, roughness: .45 }));
@@ -147,7 +152,7 @@ export function play3D({ host, frames, M, scorer, title, onEnd }) {
 
   // Temps du ralenti
   const t0 = frames[0].at, t1 = frames[frames.length - 1].at, span = t1 - t0;
-  const SPEED = .42, DUR = Math.min(5600, span / SPEED);
+  const SPEED = .55, DUR = Math.min(6000, span / SPEED);
   const lastB = frames[frames.length - 1].V.b, goalSide = lastB[1] < FL / 2 ? -1 : 1; // but visé (X = -50 ou +50)
   const firstB = frames[0].V.b;
   const pick = tt => { let i = 0; while (i < frames.length - 2 && frames[i + 1].at <= tt) i++; const A = frames[i], B = frames[i + 1] || A; const k = B.at > A.at ? Math.min(1, Math.max(0, (tt - A.at) / (B.at - A.at))) : 0; return [A.V, B.V, k]; };
@@ -158,14 +163,18 @@ export function play3D({ host, frames, M, scorer, title, onEnd }) {
   function frame(now) {
     if (done) return;
     const el = now - start, k = Math.min(1, el / DUR);
-    const tt = t0 + el * SPEED;
+    const tt = Math.max(t0, t1 - DUR * SPEED) + el * SPEED; // le ralenti se termine toujours sur le but
     const [A, B, f] = pick(Math.min(t1, tt));
     // joueurs
     A.p.forEach((pa, i) => {
       const pb = B.p[i] || pa, [X, Z] = W2X(L(pa[0], pb[0], f), L(pa[1], pb[1], f)), P = players[i];
-      const moving = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]) > .001;
-      P.g.position.set(X, moving ? Math.abs(Math.sin(now / 90 + i)) * .12 : 0, Z);
-      const flip = pa[5] || 0; P.g.rotation.z = flip > 0 ? (.7 - flip) / .7 * Math.PI * 1.6 : 0;
+      const moving = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]) > .002;
+      P.ph += moving ? .32 : 0;
+      P.g.position.set(X, moving ? Math.abs(Math.sin(P.ph)) * .1 : 0, Z);
+      P.g.rotation.y = Math.atan2(pa[3], pa[2]);
+      P.legs[0].rotation.x = moving ? Math.sin(P.ph) * .7 : 0; P.legs[1].rotation.x = -P.legs[0].rotation.x;
+      const flip = pa[5] || 0; P.pv.rotation.x = flip > 0 ? -(.7 - flip) / .7 * Math.PI * 1.35 : 0;
+      if (flip > 0) { P.legs[0].rotation.x = -1.2; P.legs[1].rotation.x = .5; P.g.position.y += Math.sin((.7 - flip) / .7 * Math.PI) * 1.5; } // saut de la retournée
     });
     // ballon
     const bx = L(A.b[0], B.b[0], f), by = L(A.b[1], B.b[1], f), bz = L(A.b[5] || 0, B.b[5] || 0, f);
@@ -176,11 +185,11 @@ export function play3D({ host, frames, M, scorer, title, onEnd }) {
     // filet qui se gonfle quand le ballon y entre
     for (const g of [scene.userData.g0, scene.userData.g1]) { const inside = g.userData.side * BX > FL / 2; g.userData.back.scale.z = 1; g.userData.back.position.x = g.userData.side * (FL / 2 + GD + (inside ? .9 : 0)); }
     // caméra de diffusion : derrière l'action puis elle tourne vers le côté du but
-    const gx = goalSide * FL / 2, dirX = Math.sign(gx - BX) || goalSide;
+    const gx = goalSide * FL / 2, FX = Math.max(-FL / 2 + 3, Math.min(FL / 2 - 3, BX)), dirX = goalSide;
     const ang = L(.15, 1.25, k * k * (3 - 2 * k)) * (firstB[0] > FW / 2 ? -1 : 1);
     const dist = L(19, 11, k), h = L(9, 3.4, k);
-    tmp.set(BX - dirX * Math.cos(ang) * dist, h, BZ + Math.sin(ang) * dist * 1.1);
-    const look = new T.Vector3(L(BX, gx, .25 + k * .3), L(1.2, .9 + bz * ZK * .5, k), BZ * .8);
+    tmp.set(FX - dirX * Math.cos(ang) * dist, h, BZ * .7 + Math.sin(ang) * dist * 1.1);
+    const look = new T.Vector3(L(FX, gx, .2 + k * .35), L(1.4, 1.2 + bz * ZK * .4, k), BZ * .75);
     if (first) { camPos.copy(tmp); camLook.copy(look); first = false; }
     camPos.lerp(tmp, .08); camLook.lerp(look, .12);
     cam.position.copy(camPos); cam.lookAt(camLook);
