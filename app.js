@@ -2,6 +2,7 @@ import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, custo
 import { predictOwn } from './predict.js';
 import { openTuto, tutoSeen } from './tuto.js';
 import { PAD, initPad, pollPad, rumble, padLabels } from './gamepad.js';
+import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundOn, setSound } from './sound.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
@@ -18,25 +19,25 @@ let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 
 /* ---------- Son ---------- */
-let AC = null;
-function audio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch { AC = null; } } if (AC && AC.state === 'suspended') AC.resume().catch(() => { }); return AC; }
-function tone(f, dur, type, vol, f2, delay) { const a = AC; if (!a) return; try { const t0 = a.currentTime + (delay || 0); const o = a.createOscillator(), g = a.createGain(); o.type = type || 'sine'; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur); g.gain.setValueAtTime(vol || .15, t0); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur); o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur + .02); } catch { } }
-function cheer() { const a = AC; if (!a) return; try { const len = a.sampleRate * 1.8, buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.min(1, i / (a.sampleRate * .15)) * Math.pow(1 - i / len, 1.4); const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = .7; g.gain.value = .35; s.buffer = buf; s.connect(f); f.connect(g); g.connect(a.destination); s.start(); } catch { } }
 const buzz = ms => { try { navigator.vibrate?.(ms); } catch { } if (PAD.on) { const t = Array.isArray(ms) ? ms.reduce((a, b) => a + b, 0) : ms; rumble(Math.max(40, t), t > 100 ? 1 : .55, .5); } };
 setPackSounds({ tone, cheer, buzz });
 initPackOverlay();
 function playEvent(type, val) {
-  if (type === 'kick') tone(150, .09, 'triangle', .22 * (val || 1), 55);
-  else if (type === 'goal') { cheer(); buzz([60, 40, 120]); }
-  else if (type === 'whistle') for (let i = 0; i < (val || 1); i++) tone(2900, i === val - 1 ? .45 : .18, 'square', .05, 2700, i * .26);
-  else if (type === 'post') tone(700, .15, 'triangle', .12, 500);
-  else if (type === 'save') tone(220, .08, 'sine', .12);
-  else if (type === 'steal') tone(90, .12, 'sawtooth', .12, 50);
-  else if (type === 'header') tone(260, .1, 'sine', .2, 160);
-  else if (type === 'volley') { tone(110, .16, 'sawtooth', .2, 50); buzz([25, 20, 40]); }
-  else if (type === 'bicycle') { tone(120, .2, 'sawtooth', .2, 60); setTimeout(() => cheer(), 120); buzz([30, 30, 60]); }
-  else if (type === 'cross') tone(180, .12, 'triangle', .14, 90);
+  if (type === 'kick') { if (GAME?.localKickAt && performance.now() - GAME.localKickAt < 350) return; SND.kick(val || 1); }
+  else if (type === 'goal') { SND.goal(); buzz([60, 40, 120]); }
+  else if (type === 'whistle') SND.whistle(val || 1);
+  else if (type === 'post') SND.post();
+  else if (type === 'save') SND.save();
+  else if (type === 'steal') SND.steal();
+  else if (type === 'header') SND.header();
+  else if (type === 'volley') { SND.volley(); buzz([25, 20, 40]); }
+  else if (type === 'bicycle') { SND.bicycle(); buzz([30, 30, 60]); }
+  else if (type === 'cross') SND.cross();
 }
+// petit clic sur les boutons des menus
+document.addEventListener('click', e => { if (e.target.closest('button') && !e.target.closest('#game')) { audio(); SND.click(); } }, true);
+/** Invité : le son de frappe part tout de suite au doigt, sans attendre le retour de l'hôte */
+function localKick(p) { if (GAME?.online && GAME.side === 1 && myBall()) { SND.kick(p); GAME.localKickAt = performance.now(); } }
 
 /* ---------- Compte ---------- */
 let ME = null; // profil
@@ -481,7 +482,7 @@ const LOB_MS = 320; // appui long sur PASSE = ballon en l'air
 /** PASSE : sans ballon on agit tout de suite (changer de joueur) ; avec le ballon on attend le relâchement (court = passe, long = en l'air) */
 function myBall() { const V = GAME?.V; if (!V) return false; const own = V.b[3], me = GAME.side; return own >= 0 && (own === V.c[me] || (GAME.M.players[own].gk && GAME.M.players[own].t === me)); }
 function aPress() { if (myBall()) { LI.aDown = true; LI.aT = performance.now(); } else { LI.a++; LI.aFlash = .15; buzz(8); } }
-function aRelease() { if (!LI.aDown) return; LI.aDown = false; if (performance.now() - LI.aT >= LOB_MS) { LI.l++; buzz([10, 30, 18]); } else { LI.a++; buzz(8); } LI.aFlash = .15; }
+function aRelease() { if (!LI.aDown) return; LI.aDown = false; localKick(.8); if (performance.now() - LI.aT >= LOB_MS) { LI.l++; buzz([10, 30, 18]); } else { LI.a++; buzz(8); } LI.aFlash = .15; }
 const ptrs = new Map();
 function hit(x, y) {
   const g = R.ctrl;
@@ -515,7 +516,7 @@ cv.addEventListener('pointermove', e => { if (ptrs.get(e.pointerId) !== 'J') ret
 function up(e) {
   const k = ptrs.get(e.pointerId); if (!k) return; ptrs.delete(e.pointerId);
   if (k === 'J') { LI.joyOn = false; LI.tx = LI.ty = 0; LI.klx = LI.kly = 0; }
-  else if (k === 'B') { LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
+  else if (k === 'B') bRelease();
   else if (k === 'A') aRelease();
 }
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
@@ -533,11 +534,11 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => {
   KEYS[e.code] = false;
   if (e.code === 'KeyJ' || e.code === 'KeyF') aRelease();
-  if ((e.code === 'KeyK' || e.code === 'KeyG' || e.code === 'Space') && LI.bDown) { LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
+  if ((e.code === 'KeyK' || e.code === 'KeyG' || e.code === 'Space') && LI.bDown) bRelease();
 });
 /* Manette */
 function bPress() { if (LI.bDown) return; LI.bDown = true; LI.b++; }
-function bRelease() { if (!LI.bDown) return; LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
+function bRelease() { if (!LI.bDown) return; localKick(1.3); LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
 function closeTop() {
   if (!$('#menu').hidden) { $('#menu').hidden = true; return true; }
   for (const id of ['tuto', 'pack', 'picker']) {
@@ -607,10 +608,10 @@ function beginGame({ cfg, side, online, names, uids }) {
     acc: 0, tick: 0, sentAt: 0, lastSent: '', done: false, peerGoneAt: 0, endData: null,
   };
   if (side === 0) g.G = createMatch({ teams: M.team, dur: cfg.dur, humans, diff: 1 });
-  g.onSnap = d => { const now = performance.now(); g.lastSnapAt = now; if (g.snaps.length && d.q <= g.snaps[g.snaps.length - 1].q) return; g.snaps.push({ at: now, q: d.q, s: d.s }); if (g.snaps.length > 30) g.snaps.shift(); };
+  g.onSnap = d => { const now = performance.now(); const dtA = now - g.lastSnapAt; if (dtA > 0 && dtA < 400) { g.ia = g.ia ? g.ia * .9 + dtA * .1 : dtA; g.jit = (g.jit || 0) * .9 + Math.abs(dtA - g.ia) * .1; } g.lastSnapAt = now; if (g.snaps.length && d.q <= g.snaps[g.snaps.length - 1].q) return; g.snaps.push({ at: now, q: d.q, s: d.s }); if (g.snaps.length > 30) g.snaps.shift(); };
   g.onEnd = d => { if (!g.done) finishGame(d); };
   g.forfeit = (iWin, msg) => { if (g.done) return; const sc = iWin ? [3, 0] : [0, 3]; finishGame({ forfeit: true, msg, score: side === 0 ? sc : [sc[1], sc[0]] }); };
-  GAME = g; R.me = side;
+  GAME = g; R.me = side; audio(); crowdStart();
   show('game'); $('#menu').hidden = true;
   R.resize(); requestAnimationFrame(() => R.resize());
   keepAwake();
@@ -620,7 +621,8 @@ screen.orientation?.addEventListener?.('change', () => setTimeout(() => GAME && 
 
 function interp(snaps, now) {
   if (!snaps.length) return null;
-  const delay = (GAME.net?.mode === 'p2p' ? 55 : 95);
+  // délai d'interpolation adaptatif : juste ce qu'il faut selon la régularité du réseau (moins de latence)
+  const base = GAME.net?.mode === 'p2p' ? 33 : 50, delay = Math.max(34, Math.min(130, (GAME.ia || base) * 1.15 + (GAME.jit || 8) * 2.2 + 6));
   const t = now - delay;
   let a = null, b = null;
   for (let i = snaps.length - 1; i >= 0; i--) { if (snaps[i].at <= t) { a = snaps[i]; b = snaps[i + 1]; break; } }
@@ -690,6 +692,8 @@ function frame(now) {
     }
     // Historique des 3 dernières secondes (pour le ralenti des buts)
     if (g.V) { (g.hist ||= []).push({ at: now, V: g.V }); while (g.hist.length && now - g.hist[0].at > 4200) g.hist.shift(); }
+    // Ambiance : la foule monte quand le ballon approche d'un but
+    if (g.V) crowdLevel(1 - Math.min(g.V.b[1], FL - g.V.b[1]) / 30);
     // Charge du tir affichée localement
     if (g.V) {
       const hasBall = g.V.b[3] >= 0 && g.V.b[3] === g.V.c[g.side];
@@ -718,14 +722,16 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 /* Menu pendant le match */
-function openMenu() { $('#menu').hidden = false; $('#bQuit').textContent = GAME?.online ? 'Abandonner le match' : 'Quitter l\'entraînement'; }
+function soundLabel() { const b = $('#bSound'); if (b) b.textContent = soundOn() ? 'Son : activé' : 'Son : coupé'; }
+$('#bSound')?.addEventListener('click', () => { setSound(!soundOn()); soundLabel(); });
+function openMenu() { soundLabel(); $('#menu').hidden = false; $('#bQuit').textContent = GAME?.online ? 'Abandonner le match' : 'Quitter l\'entraînement'; }
 $('#bResume').addEventListener('click', () => { $('#menu').hidden = true; });
 $('#bFull').addEventListener('click', () => { goFull(); $('#menu').hidden = true; });
 $('#bQuit').addEventListener('click', () => {
   $('#menu').hidden = true;
   if (!GAME) return;
   if (GAME.online) { ROOM?.send('quit', {}); GAME.forfeit(false, 'Tu as abandonné le match.'); }
-  else { stopReplay(GAME); GAME = null; renderHome(); show('home'); }
+  else { stopReplay(GAME); crowdStop(); GAME = null; renderHome(); show('home'); }
 });
 
 /* ---------- Fin du match ---------- */
@@ -737,7 +743,7 @@ function noteOf(p, score) {
 }
 async function finishGame(sum) {
   const g = GAME; if (!g || g.done) return;
-  g.done = true; clearTimeout(g.endTimer); stopReplay(g);
+  g.done = true; clearTimeout(g.endTimer); stopReplay(g); crowdStop();
   try { wake?.release(); } catch { }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
   const me = g.side, op = 1 - me, M = g.M, sc = sum.score || [0, 0];

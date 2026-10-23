@@ -325,8 +325,12 @@ export function createRenderer(canvas) {
     };
     chip(L0, M.kit[me], nL, 0); chip(R0, M.kit[op], nR, 1);
     const sg = ctx.createLinearGradient(0, by, 0, by + bh); sg.addColorStop(0, '#ffffff'); sg.addColorStop(1, '#d9e2dc');
-    ctx.fillStyle = sg; rr(mid - scW / 2, by - 1, scW, bh + 2, 4); ctx.fill();
+    const gk = R.goalT ? (performance.now() - R.goalT) / 1400 : 1, pul = gk < 1 ? 1 + Math.sin(gk * Math.PI * 3) * (1 - gk) * .18 : 1;
+    ctx.save(); ctx.translate(mid, y); ctx.scale(pul, pul); ctx.translate(-mid, -y);
+    if (gk < 1) { ctx.shadowColor = '#ffe08a'; ctx.shadowBlur = 18 * (1 - gk); }
+    ctx.fillStyle = sg; rr(mid - scW / 2, by - 1, scW, bh + 2, 4); ctx.fill(); ctx.shadowBlur = 0;
     ctx.fillStyle = '#0b1411'; ctx.textAlign = 'center'; ctx.fillText(`${V.sc[me]} – ${V.sc[op]}`, mid, y);
+    ctx.restore();
     // pseudos
     ctx.font = `600 ${Math.round(fs * .55)}px ${FD}`; ctx.fillStyle = 'rgba(238,243,234,.62)';
     if (L0 > 160) { ctx.textAlign = 'right'; ctx.fillText((M.names[me] || '').toUpperCase(), L0 - 10, y); }
@@ -462,6 +466,22 @@ export function createRenderer(canvas) {
     ctx.quadraticCurveTo(ex + dir * (GD * R.S + bulge * 1.6), my, ex + dir * GD * R.S, my + gh); ctx.stroke();
     ctx.restore();
   }
+  /** Après un but : flashs d'appareils photo dans les tribunes + éclair blanc rapide */
+  function drawFlashes() {
+    if (!R.goalT) return;
+    const k = (performance.now() - R.goalT) / 2600; if (k > 1) return;
+    const S = R.S, tTop = R.OY - 19 * S, tBot = R.OY - 3 * S, bTop = R.OY + (FW + 3) * S, bBot = R.OY + (FW + 19) * S;
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 9; i++) {
+      const top = Math.random() < .5, y = top ? tTop + Math.random() * (tBot - tTop) : bTop + Math.random() * (bBot - bTop);
+      if (y < R.hud || y > R.H) continue;
+      const x = Math.random() * R.W, r = 1.2 + Math.random() * 2.2;
+      ctx.globalAlpha = .5 + Math.random() * .5; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha *= .35; ctx.beginPath(); ctx.arc(x, y, r * 3.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (k < .1) { ctx.fillStyle = `rgba(255,255,255,${(.1 - k) * 2.2})`; ctx.fillRect(0, 0, R.W, R.H); }
+  }
   R.shk = 0; let shkT = 0;
   R.draw = (V, M, ui) => {
     R.me = ui.me;
@@ -472,6 +492,7 @@ export function createRenderer(canvas) {
     if (!V || !R.ctrl) { ctx.fillStyle = '#0b1411'; ctx.fillRect(0, 0, R.W, R.H); return; }
     drawPitch();
     drawNet();
+    drawFlashes();
     const order = V.p.map((p, i) => i).sort((a, b) => sy(V.p[a][0], V.p[a][1]) - sy(V.p[b][0], V.p[b][1]));
     drawLanding(V);
     LABELS.length = 0;
@@ -500,7 +521,7 @@ export function createRenderer(canvas) {
     return out;
   };
   R.goalBurst = (team, M) => {
-    R.shk = .45; R.net = { side: team === R.me ? 1 : 0, t: performance.now() };
+    R.shk = .45; R.net = { side: team === R.me ? 1 : 0, t: performance.now() }; R.goalT = performance.now();
     const left = (team === R.me) ? false : true; // on marque à droite
     const gx = left ? R.OX : R.OX + FL * R.S, gy = R.OY + CX * R.S, out = [];
     for (let i = 0; i < 70; i++) out.push({ x: gx, y: gy + (Math.random() * 2 - 1) * GH * R.S, vx: (Math.random() * 2 - 1) * 220, vy: (Math.random() * 2 - 1) * 160, c: Math.random() < .5 ? M.kit[team].c1 : M.kit[team].c2, life: 1 + Math.random(), r: 2 + Math.random() * 2, rot: Math.random() * 6 });
