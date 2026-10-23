@@ -53,6 +53,7 @@ function playEvent(type, val) {
   else if (type === 'volley') { SND.volley(); buzz([25, 20, 40]); }
   else if (type === 'bicycle') { SND.bicycle(); buzz([30, 30, 60]); }
   else if (type === 'cross') SND.cross();
+  else if (type === 'chip') { SND.chip(); buzz([15, 20, 25]); }
 }
 // petit clic sur les boutons des menus
 document.addEventListener('click', e => { if (e.target.closest('button') && !e.target.closest('#game')) { audio(); SND.click(); } }, true);
@@ -143,11 +144,14 @@ async function renderHome() {
   renderRewardTiles(); loadAchievements();
   $('#homeErr').textContent = '';
   const [{ data: top }, { data: mine }] = await Promise.all([
-    sb.from('profiles').select('id,display,rating,wins,draws,losses,avatar,fav_team,title').order('rating', { ascending: false }).limit(20),
+    sb.from('profiles').select('id,display,rating,wins,draws,losses,avatar,fav_team,title').order('rating', { ascending: false }).order('wins', { ascending: false }).limit(1001),
     sb.from('matches').select('home,away,home_team,away_team,home_score,away_score,created_at,hp:profiles!matches_home_fkey(display),ap:profiles!matches_away_fkey(display)')
       .or(`home.eq.${ME.id},away.eq.${ME.id}`).order('created_at', { ascending: false }).limit(8),
   ]);
   $('#board').innerHTML = (top || []).map(p => `<li class="${p.id === ME.id ? 'mine' : ''}" data-prof="${p.id}" tabindex="0" role="button" aria-label="Voir le profil de ${esc(p.display)}"><span class="bav">${shirtSVG(kitOf(p))}</span><span class="nm">${esc(p.display)}${p.title ? `<small>${esc(p.title)}</small>` : ''}</span><span class="rec">${p.wins}V ${p.draws}N ${p.losses}D</span><span class="pts">${p.rating}</span></li>`).join('') || '<li class="muted">Personne pour l\'instant. Joue le premier match !</li>';
+  { const n = (top || []).length, i = (top || []).findIndex(p => p.id === ME.id), bc = $('#boardCount'), bm = $('#bMyRank');
+    if (bc) bc.textContent = n >= 1001 ? 'Top 1001' : n ? `${n} joueur${n > 1 ? 's' : ''}` : '';
+    if (bm) { bm.hidden = i < 0; bm.textContent = i >= 0 ? `Ma place : ${i + 1}ᵉ` : ''; bm.onclick = () => $('#board li.mine')?.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
   $('#board').querySelectorAll('[data-prof]').forEach(li => { li.onclick = () => openProfile(li.dataset.prof); li.onkeydown = e => { if (e.key === 'Enter') openProfile(li.dataset.prof); }; });
   renderFriends();
   $('#recent').innerHTML = (mine || []).map(m => {

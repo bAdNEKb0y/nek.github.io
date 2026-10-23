@@ -397,7 +397,8 @@ export function createRenderer(canvas) {
     const me = R.me, c = V.c[R.slot] ?? -1, own = V.b[3], has = own >= 0 && own === c;
     const gkHas = own >= 0 && M.players[own].gk && M.players[own].t === me;
     const held = I.aDown ? Math.min(1, (performance.now() - I.aT) / 320) : 0;
-    drawBtn(g.ax, g.ay, g.ar, held >= 1 ? 'EN L\'AIR' : has ? 'PASSE' : gkHas ? 'RELANCE' : 'CHANGER', I.aFlash > 0 || held >= 1, held >= 1 ? '#ffe08a' : '#e9f1e6', held);
+    const pc = has ? V.p[c] : null, chipZ = pc && Math.abs(pc[1] - (me === 0 ? 0 : 100)) < 27 && Math.abs(pc[0] - 32) < 16;
+    drawBtn(g.ax, g.ay, g.ar, held >= 1 ? (chipZ ? 'PIQUÉ' : 'EN L\'AIR') : has ? 'PASSE' : gkHas ? 'RELANCE' : 'CHANGER', I.aFlash > 0 || held >= 1, held >= 1 ? '#ffe08a' : '#e9f1e6', held);
     let inRange = false;
     if (!has && c >= 0 && own >= 0 && M.players[own].t !== me && !M.players[own].gk) {
       const pc = V.p[c]; inRange = Math.hypot(pc[0] - V.b[0], pc[1] - V.b[1]) < 3.8;
@@ -447,7 +448,7 @@ export function createRenderer(canvas) {
   function drawBtn(x, y, r, label, on, col, charge) {
     ctx.fillStyle = on ? col : 'rgba(6,12,10,.35)'; ctx.strokeStyle = col; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    if (charge > 0) { ctx.strokeStyle = label === 'EN L\'AIR' ? '#ffe08a' : charge > .85 ? '#f0776b' : '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + charge * Math.PI * 2); ctx.stroke(); }
+    if (charge > 0) { ctx.strokeStyle = (label === 'EN L\'AIR' || label === 'PIQUÉ') ? '#ffe08a' : charge > .85 ? '#f0776b' : '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + charge * Math.PI * 2); ctx.stroke(); }
     ctx.fillStyle = on ? '#0b1411' : col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     let fz = Math.min(r * .5, 24); ctx.font = `800 ${fz}px ${FD}`;
     const tw = ctx.measureText(label).width; if (tw > r * 1.62) { fz *= r * 1.62 / tw; ctx.font = `800 ${fz}px ${FD}`; }

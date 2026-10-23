@@ -25,7 +25,7 @@ const STEPS = [
   { t: 'Passe courte', d: 'Appuie brièvement sur PASSE : le ballon part à ras de terre vers le coéquipier dans la direction de ton joystick (il est entouré en pointillés).',
     art: pitch(`${player(120, 100, 10, Y, true)}<circle cx="215" cy="60" r="16" fill="none" stroke="${Y}" stroke-width="2.5" stroke-dasharray="4 4"/>${player(215, 60, 7)}
       <circle r="5" fill="#fff" stroke="${K}"><animateMotion dur="1.4s" repeatCount="indefinite" path="M134 98 L206 64"/></circle>${btn(275, 125, 26, 'PASSE')}${finger(275, 125)}`) },
-  { t: 'Passe en l\'air', d: 'Garde le doigt sur PASSE : le bouton devient « EN L\'AIR ». Relâche, et le ballon part en hauteur vers un coéquipier loin devant. Une cible au sol montre où il va tomber : tes joueurs y courent.',
+  { t: 'Passe en l\'air', d: 'Garde le doigt sur PASSE : le bouton devient « EN L\'AIR ». Relâche, et le ballon part en hauteur vers un coéquipier loin devant. Une cible au sol montre où il va tomber : tes joueurs y courent. Près du but adverse, EN L\'AIR fait un tir piqué au-dessus du gardien !',
     art: pitch(`${player(70, 120, 4, Y, true)}${player(240, 50, 9)}
       <g><circle cx="244" cy="54" r="15" fill="none" stroke="#ffe08a" stroke-width="2.5" stroke-dasharray="4 3"/><path d="M237 54 h14 M244 47 v14" stroke="#ffe08a" stroke-width="2"/></g>
       <path d="M80 116 Q160 -10 240 54" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2" stroke-dasharray="5 6"/>
@@ -37,7 +37,7 @@ const STEPS = [
       <circle cx="80" cy="120" r="32" fill="none" stroke="#f0776b" stroke-width="5" stroke-dasharray="200" stroke-dashoffset="200"><animate attributeName="stroke-dashoffset" values="200;0;0" keyTimes="0;.8;1" dur="1.4s" repeatCount="indefinite"/></circle>`) },
   { t: 'Défendre', d: 'Sans le ballon, le bouton rouge devient VOLER : approche-toi du porteur et appuie pour tacler. CHANGER te fait prendre le joueur le plus proche du ballon.',
     art: pitch(`${player(150, 85, 3, Y, true)}${player(185, 85, 9, C)}${ball(172, 85)}${btn(250, 60, 24, 'VOLER', '#f0776b')}${btn(270, 125, 22, 'CHANGER')}${finger(250, 60)}`) },
-  { t: 'Têtes et retournées', d: 'Sur un centre, ton joueur reprend de la tête tout seul. Garde TIR appuyé pendant que le ballon arrive en l\'air : un joueur noté 90+ tente une reprise de volée, un 92+ peut tenter une retournée !',
+  { t: 'Têtes et retournées', d: 'Sur un centre, ton joueur reprend de la tête tout seul. Appuie ou garde TIR pendant que le ballon arrive en l\'air : n\'importe quel joueur tente une reprise de volée (plus précise pour les 90+), et un 92+ peut tenter une retournée !',
     art: pitch(`<rect x="300" y="62" width="10" height="46" fill="rgba(255,255,255,.2)" stroke="#fff" stroke-width="2"/>
       <g transform="translate(250 85)"><circle r="22" fill="none" stroke="#ffe08a" stroke-width="2" opacity=".7"><animate attributeName="r" values="14;26;14" dur="1s" repeatCount="indefinite"/></circle>
       <g><animateTransform attributeName="transform" type="scale" values="1 1;.2 1;1 1" dur="1s" repeatCount="indefinite"/><circle r="11" fill="#ff4fa3" stroke="${K}" stroke-width="1.5"/><text y="4" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="sans-serif">7</text></g></g>

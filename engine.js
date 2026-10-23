@@ -186,16 +186,18 @@ function passTo(G, p, m, opt = {}) {
 /** Reprise de volée directe (joueurs notés 90 et plus) : le receveur frappe sans contrôle */
 function canVolley(G, p) {
   const b = G.ball;
-  if (p.r < 90 || p.gk || b.z < .25 || b.z > 2.2) return false;
+  if (p.gk || b.z < .25 || b.z > 2.2) return false;
   if (toGoalOf(p.t, p.y) > 30 || Math.abs(p.x - CX) > 22) return false;
-  return isCtrl(G, p) ? G.hold[slotOf(G, p)] : Math.random() < .45;
+  if (isCtrl(G, p)) return wantsShot(G, p); // l'humain : il a appuyé sur TIR pendant que le ballon arrivait
+  return p.r >= 90 && b.last && b.last.t === p.t && Math.random() < .45;
 }
+const wantsShot = (G, p) => isCtrl(G, p) && (G.hold[slotOf(G, p)] || (p.wantShot || 0) > 0);
 function volley(G, p) {
   const b = G.ball, gy = atkY(p.t), tm = T(G, p), gk = G.byTeam[1 - p.t][0];
   const aimX = CX + (gk.x > CX ? -1 : 1) * rnd(2.5, GH - 1);
-  const a = Math.atan2(gy - b.y, aimX - b.x) + gauss() * (1.12 - (tm.att + pb(G, p)) / 100) * .26;
-  const sp = 36 + (p.r - 90) * 1.4 + rnd(0, 6);
-  p.kcd = .4; p.st.tir++; G.stats.shots[p.t]++;
+  const a = Math.atan2(gy - b.y, aimX - b.x) + gauss() * (1.12 - (tm.att + pb(G, p)) / 100) * (p.r >= 90 ? .26 : .34);
+  const sp = Math.max(30, 36 + (p.r - 90) * 1.4) + rnd(0, 6);
+  p.kcd = .4; p.wantShot = 0; p.st.tir++; G.stats.shots[p.t]++;
   kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, 1.4, rnd(0, 2));
   const vy = Math.sin(a) * sp; if (vy) { const tt = (gy - b.y) / vy; if (tt > 0 && Math.abs(b.x + Math.cos(a) * sp * tt - CX) < GH) G.stats.onT[p.t]++; }
   b.spec = 'volley'; ev(G, 'volley', {}); banner(G, 'REPRISE DE VOLÉE !', p.name, 1, p.t); G.passTarget = null;
@@ -246,6 +248,19 @@ function shoot(G, p, power, aim) {
   if (vy !== 0) { const tt = (gy - b.y) / vy; if (tt > 0) { const xl = b.x + vx * tt; if (Math.abs(xl - CX) < GH) G.stats.onT[p.t]++; } }
   G.passTarget = null;
 }
+/** Tir lobé : le ballon monte au-dessus du gardien et retombe sous la barre */
+function chip(G, p, aim) {
+  const tm = T(G, p), gy = atkY(p.t), b = G.ball;
+  const tx = CX + clamp(aim, -1, 1) * (GH - 2), D = hyp(tx - b.x, gy - b.y);
+  const sp = clamp(D * .9, 10, 19), t = -Math.log(1 - .12 * D / sp) / .12; // trajectoire freinée par l'air
+  const a = Math.atan2(gy - b.y, tx - b.x) + gauss() * (1.1 - (tm.att + pb(G, p)) / 100) * .14;
+  const vz = (1.8 + rnd(-.6, 1.5) - (tm.att + pb(G, p) - 80) / 40 + GRAV * t * t / 2) / t; // hauteur au passage de la ligne
+  p.st.tir++; G.stats.shots[p.t]++;
+  kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, .9, Math.min(vz, 24));
+  b.lift = Math.min(t * .6, .5);
+  const xl = b.x + Math.cos(a) * D; if (Math.abs(xl - CX) < GH) G.stats.onT[p.t]++;
+  b.spec = 'chip'; ev(G, 'chip', {}); banner(G, 'PIQUÉ !', p.name, .9, p.t); G.passTarget = null;
+}
 function tackle(G, p) {
   if (p.tcd > 0 || p.stun > 0) return;
   p.tcd = .6;
@@ -263,13 +278,13 @@ function switchPlayer(G, s) {
   const list = G.byTeam[t].filter(p => !p.gk && !isCtrl(G, p)).sort((a, q) => hyp(a.x - b.x, a.y - b.y) - hyp(q.x - b.x, q.y - b.y));
   if (list[0]) G.ctrl[s] = list[0];
 }
-function choosePass(G, p, dx, dy) {
+function choosePass(G, p, dx, dy, safe) {
   let best = null, bc = 1e9, fb = null, fc = 1e9;
   for (const m of G.byTeam[p.t]) {
     if (m === p) continue;
     const vx = m.x - p.x, vy = m.y - p.y, d = hyp(vx, vy); if (d < 3) continue;
     const ang = Math.acos(clamp((vx * dx + vy * dy) / d, -1, 1));
-    const cost = ang * 1.6 + d / 45 + (m.gk ? .9 : 0);
+    const cost = ang * 1.6 + d / 45 + (m.gk ? .9 : 0) + (safe ? Math.max(0, 5 - openness(G, p, m)) * .9 : 0);
     if (ang < 1.25 && cost < bc) { bc = cost; best = m; }
     if (cost < fc) { fc = cost; fb = m; }
   }
@@ -326,6 +341,7 @@ function humanControl(G, s, I, dt) {
   if (!c || c.gk) c = G.ctrl[s] = nearestFree(G, t, b.x, b.y);
   if (!c) return;
   const mag = Math.min(1, I.mag);
+  if (own !== c && (I.bDown || I.rel) && (b.z > .2 || G.land)) c.wantShot = .9; else c.wantShot = Math.max(0, (c.wantShot || 0) - dt);
   if (c.stun > 0) steer(c, 0, 0, dt, 4);
   else if (mag > .12) { const sp = maxSp(G, c) * (.5 + .5 * mag); steer(c, I.jx / I.mag * sp, I.jy / I.mag * sp, dt); }
   else if (!own && (G.passTarget === c || G.land)) { const q = G.land || [b.x + b.vx * .25, b.y + b.vy * .25]; moveTo(G, c, q[0], q[1], 1, dt); } // sans joystick, il va au point de chute
@@ -344,7 +360,9 @@ function humanControl(G, s, I, dt) {
     }
     const dx = mag > .3 ? I.jx / I.mag : c.fx, dy = mag > .3 ? I.jy / I.mag : c.fy;
     G.preview[s] = choosePass(G, c, dx, dy);
-    if (I.lob) { passTo(G, c, chooseLongPass(G, c, dx, dy), { loft: true }); G.charge[s] = 0; G.preview[s] = null; }
+    const chipZone = toGoalOf(t, c.y) < 27 && Math.abs(c.x - CX) < 16 && (mag < .3 || dy * dirOf(t) > .2);
+    if (I.lob && chipZone) { chip(G, c, mag > .25 ? clamp(I.jx / I.mag * 1.25, -1, 1) : 0); G.charge[s] = 0; G.preview[s] = null; }
+    else if (I.lob) { passTo(G, c, chooseLongPass(G, c, dx, dy), { loft: true }); G.charge[s] = 0; G.preview[s] = null; }
     else if (I.a) { passTo(G, c, G.preview[s]); G.charge[s] = 0; G.preview[s] = null; }
     else {
       if (I.bDown) G.charge[s] = Math.min(1, G.charge[s] + dt / .85);
@@ -358,7 +376,7 @@ function humanControl(G, s, I, dt) {
     G.preview[s] = null; G.charge[s] = 0;
     if (own && own.gk && own.t === t && (I.a || I.lob)) {
       const dx = mag > .3 ? I.jx / I.mag : 0, dy = mag > .3 ? I.jy / I.mag : dirOf(t);
-      if (I.lob) passTo(G, own, chooseLongPass(G, own, dx, dy), { loft: true }); else passTo(G, own, choosePass(G, own, dx, dy));
+      if (I.lob) passTo(G, own, chooseLongPass(G, own, dx, dy), { loft: true }); else passTo(G, own, choosePass(G, own, dx, dy, true));
     } else if (I.a) switchPlayer(G, s);
     if (I.b && !(G.land && !own)) tackle(G, c); // ballon en l'air : TIR sert à préparer la reprise, pas à tacler
   }
@@ -454,12 +472,29 @@ function aiOwner(G, p, dt) {
   if (near && nd < 8 && (near.y - p.y) * d > 0) tx = p.x + (p.x >= near.x ? 1 : -1) * 10;
   moveTo(G, p, clamp(tx, 3, FW - 3), clamp(ty, 2, FL - 2), 1, dt);
 }
+/** Ouverture d'un partenaire : distance du plus proche adversaire à la ligne de passe et au receveur */
+function openness(G, p, m) { let open = 99; for (const q of G.byTeam[1 - p.t]) open = Math.min(open, segDist(q.x, q.y, p.x, p.y, m.x, m.y), dist(q, m) * .8); return open; }
+/** Relance du gardien : courte vers un défenseur libre, sinon dégagement long vers l'attaquant le plus démarqué */
+function gkDistribute(G, p) {
+  const d = dirOf(p.t); let short = null, ss = -1e9, long = null, ls = -1e9;
+  for (const m of G.byTeam[p.t]) {
+    if (m === p) continue;
+    const dd = dist(p, m), open = openness(G, p, m), fwd = (m.y - p.y) * d;
+    if (dd < 34 && open > 3.2) { const sc = open * 1.2 + fwd * .15 + rnd(0, 2); if (sc > ss) { ss = sc; short = m; } }
+    let o2 = 99; for (const q of G.byTeam[1 - p.t]) o2 = Math.min(o2, dist(q, m));
+    if (fwd > 20) { const sc = o2 * 1.5 + fwd * .12 + rnd(0, 2); if (sc > ls) { ls = sc; long = m; } }
+  }
+  const pressed = G.byTeam[1 - p.t].some(q => dist(q, p) < 9);
+  if (short && !(pressed && ss < 6) && !(long && ls > 16 && Math.random() < .2)) passTo(G, p, short);
+  else if (long) passTo(G, p, long, { loft: true });
+  else passTo(G, p, short || bestPassTarget(G, p, true) || G.byTeam[p.t][1]);
+}
 function aiGK(G, p, dt) {
   const b = G.ball, gy = ownY(p.t), d = dirOf(p.t);
   if (b.owner === p) {
     steer(p, 0, 0, dt); p.fx = 0; p.fy = d; p.holdT -= dt;
     if (p.holdT <= 0 && !(G.hum[p.t] && p.holdT > -1.2)) {
-      let m = Math.random() < .7 ? bestPassTarget(G, p, true) : null; if (!m) m = G.byTeam[p.t][Math.random() < .5 ? 1 + (Math.random() * 2 | 0) : 3 + (Math.random() * 2 | 0)]; passTo(G, p, m);
+      gkDistribute(G, p);
     }
     return;
   }
@@ -537,6 +572,7 @@ function ballUpdate(G, dt) {
     if (p.kcd > 0 || p.stun > 0) continue;
     const box = p.gk && Math.abs(p.y - ownY(p.t)) < 15 && Math.abs(p.x - CX) < 19;
     if (b.z > (box ? 3.2 : 2.5)) continue; // trop haut
+    if (box && b.spec === 'chip' && b.z > 1.85 && b.vz < 0) continue; // lobé : le ballon passe au-dessus de sa tête
     const reach = PR + BR + .5 + (box ? 1.6 : 0);
     const d = hyp(p.x - b.x, p.y - b.y);
     if (d < reach && d < cd) { cd = d; cand = p; }
@@ -544,11 +580,11 @@ function ballUpdate(G, dt) {
   if (cand) {
     const p = cand;
     const box = p.gk && Math.abs(p.y - ownY(p.t)) < 15 && Math.abs(p.x - CX) < 19;
-    if (!box && b.z > .25 && b.last && b.last.t === p.t && canVolley(G, p) && !(p.r >= 92 && b.z > 1.1 && isCtrl(G, p))) { volley(G, p); return; }
+    if (!box && b.z > .25 && canVolley(G, p) && !(p.r >= 92 && b.z > 1.1 && isCtrl(G, p))) { volley(G, p); return; }
     if (b.z > .9 && !box) {
       // un coéquipier contrôle de la poitrine ; dans la surface adverse sur un centre, on reprend de la tête
       const mate = b.last && b.last.t === p.t, shotZone = toGoalOf(p.t, p.y) < 22 && Math.abs(p.x - CX) < 16;
-      if (mate && !(shotZone && (b.cross || p.r >= 92))) { giveBall(G, p); ev(G, 'control', {}); return; }
+      if (mate && !(shotZone && (b.cross || p.r >= 92 || wantsShot(G, p)))) { giveBall(G, p); ev(G, 'control', {}); return; }
       header(G, p); return;
     }
     if (box && b.z > .9) { if (Math.random() < .8 + G.ai[p.t].gk) { p.st.arr++; giveBall(G, p); ev(G, 'save', {}); } else { p.kcd = .5; b.vx = -b.vx * .3 + rnd(-8, 8); b.vy = -b.vy * .3; b.vz = 4; } return; }
@@ -573,7 +609,7 @@ function goalScored(G, t) {
   G.scorers.push({ t, name: sc ? sc.name : '', num: sc ? sc.num : 0, min: clockMin(G), own });
   // Beau but : reprise, retournée, tête, frappe de loin ou lob -> pause plus longue pour le ralenti 3D
   const dist = b.ky == null ? 0 : (t === 0 ? b.ky : FL - b.ky);
-  const beau = !own && !!sc && (['volley', 'bicycle', 'header'].includes(b.spec) || dist >= 24 || (b.maxz || 0) > 2.8);
+  const beau = !own && !!sc && (['volley', 'bicycle', 'header', 'chip'].includes(b.spec) || dist >= 24 || (b.maxz || 0) > 2.8);
   G.state = 'goal'; G.stateT = 2.8; G.nextKick = 1 - t; G.passTarget = null;
   ev(G, 'goal', { t });
   if (beau) ev(G, 'beau', { n: b.spec === 'bicycle' ? 3 : b.spec === 'volley' ? 2 : 1 });

@@ -60,6 +60,7 @@ export const S = {
   bicycle() { if (!ok()) return; this.kick(1.5); crowdOoh(1); },
   goal() { if (!ok()) return; roar(3.2, .55); const t = now() + .15; for (const f of [233, 294, 349]) { const o = osc('sawtooth', f, t, .9, .06); } },
   dribble() { if (!ok()) return; const t = now(); noise(t, .32, .22, 'bandpass', 500, 2.2, 2600, .03); osc('triangle', 340, t + .05, .18, .05, 760); crowdOoh(.6); },
+  chip() { if (!ok()) return; const t = now(); osc('sine', 150, t, .1, .35, 70); noise(t, .05, .2, 'bandpass', 2400, 1.2); osc('triangle', 500, t + .04, .45, .04, 1300); crowdOoh(.6); },
   horn() { if (!ok()) return; const t = now() + .05; for (const [f, d] of [[233, 0], [311, .55]]) { osc('sawtooth', f, t + d, .5, .07); osc('square', f / 2, t + d, .5, .04); } },
   ole() { if (!ok()) return; const t = now(); noise(t, .35, .16, 'bandpass', 520, 3, 820, .08); noise(t + .38, .6, .2, 'bandpass', 700, 3, 430, .1); },
   miss() { if (!ok()) return; const t = now(); noise(t, 1.3, .2, 'bandpass', 640, 2.2, 260, .12); osc('sine', 300, t + .05, .9, .03, 140); },
