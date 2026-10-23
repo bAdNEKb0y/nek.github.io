@@ -614,3 +614,5 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .rp-g{top:-10px;font:800 10px/1 var(--f-display);letter-spacing:.06em;background:var(--flood);color:var(--night);border-radius:6px;padding:3px 5px}
 .rp-goals{inset:-8px 8px auto}
 .rp-track{padding-top:6px}
+.pushrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pushrow .setlab small b{color:var(--chalk)}

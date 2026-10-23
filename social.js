@@ -3,6 +3,7 @@ import { sb } from './net.js';
 import { TEAMS, KITS, CARDS, CARD_LIST, TRANK, TIER_NAME } from './data.js';
 import { $, esc, shirtSVG, cardHTML } from './ui.js';
 import { openReplay, encode } from './replay.js';
+import { sendPush, enablePush } from './push.js';
 
 let H = null, ME = null, CH = null;
 export const TITLES = ['Buteur né', 'Le Mur', 'Roi du dribble', 'Maître des packs', 'Chasseur de légendes', 'Capitaine', 'Pro de la retournée', 'Tacleur fou', 'Passeur de génie', 'Futur Ballon d\'Or', 'Supporter n°1', 'Débutant motivé'];
@@ -77,7 +78,7 @@ export function renderFriends() {
   const row = (f, extra) => `<li class="frow"><button class="fmain" data-prof="${f.id}"><span class="fav">${shirtSVG(kitOf(f))}<i class="dot ${isOnline(f.id) ? 'on' : ''}"></i></span>
     <span class="fnm"><b>${esc(f.display)}</b><small>${isOnline(f.id) ? 'En ligne' : 'Hors ligne'} · ${f.rating} pts</small></span></button>${extra || ''}</li>`;
   el.innerHTML = (inc.length ? `<li class="fsec">Demandes reçues</li>${inc.map(f => row(f, `<span class="facts"><button class="btn small primary" data-acc="${f.id}">Accepter</button><button class="btn small" data-ref="${f.id}">Non</button></span>`)).join('')}` : '')
-    + acc.map(f => row(f, `<button class="btn small fmsg" data-chat="${f.id}" aria-label="Messages avec ${esc(f.display)}">💬${UNREAD[f.id] ? `<i class="badge">${UNREAD[f.id]}</i>` : ''}</button>${isOnline(f.id) ? `<button class="btn small chal" data-chal="${f.id}">Défier</button>` : ''}`)).join('')
+    + acc.map(f => row(f, `<button class="btn small fmsg" data-chat="${f.id}" aria-label="Messages avec ${esc(f.display)}">💬${UNREAD[f.id] ? `<i class="badge">${UNREAD[f.id]}</i>` : ''}</button><button class="btn small chal" data-chal="${f.id}">Défier</button>`)).join('')
     + (out.length ? `<li class="fsec">Demandes envoyées</li>${out.map(f => row(f, `<button class="link" data-ref="${f.id}">Annuler</button>`)).join('')}` : '')
     || '<li class="muted">Ajoute tes potes avec leur pseudo pour les défier en un clic.</li>';
   el.querySelectorAll('[data-prof]').forEach(b => b.onclick = () => openProfile(b.dataset.prof));
@@ -94,21 +95,23 @@ export async function addFriend(name) {
   if (error) { H.toast(errMsg(error)); return false; }
   H.toast(data.status === 'accepted' ? 'Vous êtes maintenant amis !' : 'Demande d\'ami envoyée.');
   CH?.send({ type: 'broadcast', event: 'friend', payload: { to: data.id, from: ME.id, name: ME.display, ok: data.status === 'accepted' } });
+  if (!isOnline(data.id)) sendPush({ kind: 'friend', to: data.id });
   await loadFriends(); return true;
 }
 async function respond(id, ok) {
   const { error } = await sb.rpc('friend_respond', { p_other: id, p_accept: ok });
   if (error) { H.toast(errMsg(error)); return; }
-  if (ok) CH?.send({ type: 'broadcast', event: 'friend', payload: { to: id, from: ME.id, name: ME.display, ok: true } });
+  if (ok) { CH?.send({ type: 'broadcast', event: 'friend', payload: { to: id, from: ME.id, name: ME.display, ok: true } }); if (!isOnline(id)) sendPush({ kind: 'friend', to: id }); }
   await loadFriends(); if (!$('#profile').hidden) openProfile(id);
 }
 
 /* ---------- Défis ---------- */
 function challenge(f) {
   if (!f || !CH) return;
-  const code = H.createRoom();
+  const code = H.createRoom(), on = isOnline(f.id);
   CH.send({ type: 'broadcast', event: 'invite', payload: { to: f.id, from: ME.id, name: ME.display, code } });
-  H.toast(`Défi envoyé à ${f.display}. Il arrive dans ta salle…`);
+  if (!on) sendPush({ kind: 'invite', to: f.id, code });
+  H.toast(on ? `Défi envoyé à ${f.display}. Il arrive dans ta salle…` : `${f.display} n'est pas en ligne : il reçoit une notification. Attends-le dans la salle.`);
   closeProfile();
 }
 let invT = null;
@@ -146,7 +149,7 @@ function renderProfile() {
   const fr = p.friend, inc = p.incoming;
   let act = '';
   if (mine) act = `<button class="btn" data-x="edit">${EDIT ? 'Terminé' : 'Modifier mon profil'}</button>`;
-  else if (fr === 'accepted') act = `${isOnline(p.id) ? `<button class="btn primary" data-x="chal">Défier</button>` : ''}<button class="btn" data-x="msg">💬 Message</button><button class="btn" data-x="trade">🔄 Échanger</button><button class="btn" data-x="unfriend">Retirer des amis</button>`;
+  else if (fr === 'accepted') act = `<button class="btn primary" data-x="chal">Défier</button><button class="btn" data-x="msg">💬 Message</button><button class="btn" data-x="trade">🔄 Échanger</button><button class="btn" data-x="unfriend">Retirer des amis</button>`;
   else if (fr === 'pending' && inc) act = `<button class="btn primary" data-x="accept">Accepter en ami</button><button class="btn" data-x="refuse">Refuser</button>`;
   else if (fr === 'pending') act = `<button class="btn" disabled>Demande envoyée</button>`;
   else act = `<button class="btn primary" data-x="add">Ajouter en ami</button>`;
@@ -221,7 +224,7 @@ function renderChat(loading) {
   const el = $('#chat'), f = friendOf(CHAT.id), on = isOnline(f.id);
   const canNotif = 'Notification' in window && Notification.permission === 'default';
   el.innerHTML = `<div class="box setbox chatbox"><div class="cardhead"><button class="fmain" data-x="prof"><span class="fav">${shirtSVG(kitOf(f))}<i class="dot ${on ? 'on' : ''}"></i></span><span class="fnm"><b>${esc(f.display)}</b><small>${on ? 'En ligne' : 'Hors ligne · il verra ton message plus tard'}</small></span></button>
-      ${on ? '<button class="btn small chal" data-x="chal">Défier</button>' : ''}<button class="link" data-x="close">Fermer</button></div>
+      <button class="btn small chal" data-x="chal">Défier</button><button class="link" data-x="close">Fermer</button></div>
     <div class="msgs" id="msgs">${loading ? '<p class="muted">Chargement…</p>' : CHAT.list.length ? CHAT.list.map((m, i, a) => {
       const day = new Date(m.created_at).toDateString(), prev = i ? new Date(a[i - 1].created_at).toDateString() : '';
       const sep = day !== prev ? `<div class="msep">${new Date(m.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>` : '';
@@ -235,7 +238,7 @@ function renderChat(loading) {
   el.querySelector('[data-x=close]').onclick = closeChat;
   el.querySelector('[data-x=prof]').onclick = () => { const id = f.id; closeChat(); openProfile(id); };
   const c = el.querySelector('[data-x=chal]'); if (c) c.onclick = () => { closeChat(); challenge(f); };
-  const n = el.querySelector('[data-x=notif]'); if (n) n.onclick = () => Notification.requestPermission().then(() => renderChat());
+  const n = el.querySelector('[data-x=notif]'); if (n) n.onclick = async () => { const r = await enablePush(); H.toast(r === 'on' ? '🔔 Notifications activées !' : r === 'ios-home' ? 'Sur iPhone : Partager ⬆️ → « Sur l\'écran d\'accueil », puis ouvre le jeu depuis l\'icône.' : 'Notifications non activées.'); renderChat(); };
   el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => sendMsg(f.id, +b.dataset.m));
   el.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => playReplay(b.dataset.rp));
   el.querySelector('[data-x=rpsend]').onclick = () => pickReplay(f);
@@ -252,6 +255,7 @@ export async function sendReplay(to, id, title) {
   const { data, error } = await sb.rpc('send_replay', { p_to: to, p_replay: id });
   if (error) { H.toast(/too_fast/.test(error.message) ? 'Doucement ! Attends un peu.' : 'Replay non envoyé. Réessaie.'); return false; }
   CH?.send({ type: 'broadcast', event: 'msg', payload: { to, from: ME.id, name: ME.display, m: 31, id: data.id, replay: id, title } });
+  if (!isOnline(to)) sendPush({ kind: 'msg', id: data.id });
   if (CHAT && CHAT.id === to) { CHAT.list.push({ id: data.id, mine: true, msg: 31, replay: id, replay_title: title, created_at: data.at || new Date().toISOString() }); renderChat(); }
   else H.toast('Replay envoyé !');
   return true;
@@ -260,6 +264,7 @@ async function sendMsg(to, m) {
   const { data, error } = await sb.rpc('send_msg', { p_to: to, p_msg: m });
   if (error) { H.toast(/too_fast/.test(error.message) ? 'Doucement ! Attends un peu avant de renvoyer un message.' : /not_friends/.test(error.message) ? 'Vous n\'êtes plus amis.' : 'Message non envoyé. Réessaie.'); return; }
   CH?.send({ type: 'broadcast', event: 'msg', payload: { to, from: ME.id, name: ME.display, m, id: data.id } });
+  if (!isOnline(to)) sendPush({ kind: 'msg', id: data.id });
   if (CHAT && CHAT.id === to) { CHAT.list.push({ id: data.id, mine: true, msg: m, created_at: data.at || new Date().toISOString() }); renderChat(); }
 }
 function gotMsg(p) {
@@ -322,7 +327,7 @@ async function respondTrade(id, ok, btn) {
   const t = TRADES.find(x => x.id === id);
   const { error } = await sb.rpc('trade_respond', { p_id: id, p_accept: ok });
   if (error) { H.toast(tradeErr(error)); await loadTrades(); return; }
-  if (t) CH?.send({ type: 'broadcast', event: 'trade', payload: { to: t.other, name: ME.display, kind: ok ? 'accepted' : 'declined' } });
+  if (t) { CH?.send({ type: 'broadcast', event: 'trade', payload: { to: t.other, name: ME.display, kind: ok ? 'accepted' : 'declined' } }); if (!isOnline(t.other)) sendPush({ kind: 'trade', id }); }
   if (ok) { await H.reloadCol?.(); H.toast(`Échange réussi ! ${CARDS[t?.give]?.name || 'La carte'} est dans ta collection.`); H.sound?.(); }
   await loadTrades();
 }
@@ -357,9 +362,10 @@ function renderTradeNew() {
   el.querySelectorAll('[data-want]').forEach(b => b.onclick = () => { TW.want = b.dataset.want; keepScroll(renderTradeNew); });
   el.querySelector('[data-x=send]').onclick = async e => {
     e.target.disabled = true;
-    const { error } = await sb.rpc('trade_offer', { p_to: TW.id, p_give: TW.give, p_want: TW.want });
+    const { data, error } = await sb.rpc('trade_offer', { p_to: TW.id, p_give: TW.give, p_want: TW.want });
     if (error) { H.toast(tradeErr(error)); e.target.disabled = false; return; }
     CH?.send({ type: 'broadcast', event: 'trade', payload: { to: TW.id, name: ME.display, kind: 'offer' } });
+    if (!isOnline(TW.id)) sendPush({ kind: 'trade', id: data.id });
     H.toast(`Proposition envoyée à ${TW.name} !`); await loadTrades(); openTrades();
   };
 }

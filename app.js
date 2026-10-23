@@ -9,6 +9,7 @@ import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } fr
 import { createRenderer, pickText, SIDE_COL } from './render.js';
 import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
+import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -87,6 +88,12 @@ async function afterLogin() {
   if (!ME) { show('auth'); return; }
   await loadCollection();
   renderHome(); show('home');
+  registerSW().then(async () => {
+    // une seule fois : on propose d'activer les notifications
+    let asked = false; try { asked = localStorage.getItem('fdp-push-asked') === '1'; } catch { }
+    const st = await pushState();
+    if (!asked && (st === 'off' || st === 'ios-home')) { try { localStorage.setItem('fdp-push-asked', '1'); } catch { } setTimeout(() => toast(st === 'ios-home' ? '🔔 Pour recevoir les notifs de tes amis : Partager ⬆️ → « Sur l\'écran d\'accueil ». Détails dans ⚙️ Paramètres.' : '🔔 Active les notifications dans ⚙️ Paramètres pour savoir quand tes amis t\'écrivent.'), 4500); }
+  });
   initSocial({ me: () => ME, col: () => COL, toast, busy: () => !!GAME || !!ROOM, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); }, inMatch: () => !!GAME && !GAME.done,
     createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => enterRoom(cleanCode(c), 'guest'), onMeChange: () => renderMe(),
     reloadCol: async () => { await loadCollection(); renderMe(); } });
@@ -187,6 +194,7 @@ function renderSettings() {
     ${SETUI.map(([sec, rows]) => `<section class="setsec"><h3>${sec}</h3>${rows.map(([k, lab, opt, hint]) => `<div class="setrow"><div class="setlab">${lab}${hint ? `<small>${hint}</small>` : ''}</div>${opt === 'range'
       ? `<div class="setrange"><input type="range" min="0" max="100" step="5" value="${SET[k]}" data-k="${k}" aria-label="${lab}"><b>${SET[k] === 0 ? 'Coupé' : SET[k] + ' %'}</b></div>`
       : `<div class="chips">${opt.map(([v, t]) => `<button class="chip" data-k="${k}" data-v='${JSON.stringify(v)}' aria-pressed="${SET[k] === v}">${t}</button>`).join('')}</div>`}</div>`).join('')}</section>`).join('')}
+    <section class="setsec"><h3>Notifications</h3><div id="pushRow" class="pushrow"><span class="muted">…</span></div></section>
     <section class="setsec"><h3>Autres</h3><div class="setbtns"><button class="btn" data-x="tuto">Revoir le tuto</button><button class="btn" data-x="reset">Remettre par défaut</button></div>
     <p class="hint">Les paramètres sont gardés sur cet appareil.</p></section></div>`;
   el.querySelectorAll('.chip[data-k]').forEach(b => b.onclick = () => { SET[b.dataset.k] = JSON.parse(b.dataset.v); renderSettings(); el.querySelector(`[data-k="${b.dataset.k}"][aria-pressed="true"]`)?.focus({ preventScroll: true }); });
@@ -194,6 +202,27 @@ function renderSettings() {
   el.querySelector('[data-x=close]').onclick = closeSettings;
   el.querySelector('[data-x=reset]').onclick = () => { resetSettings(); renderSettings(); toast('Paramètres remis par défaut.'); };
   el.querySelector('[data-x=tuto]').onclick = () => { closeSettings(); openTuto(); };
+  renderPushRow();
+}
+async function renderPushRow() {
+  const el = $('#pushRow'); if (!el) return;
+  const st = await pushState();
+  const T = {
+    on: ['✅ Activées', 'Tu reçois une notification quand un ami t\'écrit, te défie, t\'ajoute ou te propose un échange, même jeu fermé.', 'Désactiver'],
+    off: ['Désactivées', 'Reçois une vraie notification sur ton téléphone quand un ami t\'écrit ou te défie.', 'Activer les notifications'],
+    denied: ['Bloquées', 'Tu as refusé les notifications. Pour les remettre : Réglages du téléphone > Notifications > Foot de Poche.', ''],
+    'ios-home': ['Il faut installer le jeu', 'Sur iPhone, les notifications ne marchent que si le jeu est sur l\'écran d\'accueil : touche <b>Partager</b> ⬆️ dans Safari, puis <b>« Sur l\'écran d\'accueil »</b>, et ouvre le jeu depuis la nouvelle icône. Reviens ensuite ici.', ''],
+    unsupported: ['Pas disponible', 'Ce navigateur ne gère pas les notifications. Sur iPhone, mets à jour iOS (16.4 minimum) et installe le jeu sur l\'écran d\'accueil.', ''],
+  }[st] || ['', '', ''];
+  el.innerHTML = `<div class="setlab">${T[0]}<small>${T[1]}</small></div>${T[2] ? `<button class="btn ${st === 'on' ? '' : 'primary'} small" id="pushBtn">${T[2]}</button>` : ''}`;
+  const b = $('#pushBtn');
+  if (b) b.onclick = async () => {
+    b.disabled = true;
+    const r = st === 'on' ? await disablePush() : await enablePush();
+    if (r === 'on') { toast('🔔 Notifications activées !'); buzz([30, 30, 30]); }
+    else if (r === 'error') toast('Impossible d\'activer les notifications. Réessaie.');
+    renderPushRow();
+  };
 }
 function openSettings() { renderSettings(); $('#settings').hidden = false; $('#settings').querySelector('.chip,input')?.focus({ preventScroll: true }); }
 function closeSettings() { $('#settings').hidden = true; soundLabel(); }
