@@ -2,6 +2,7 @@
 import { sb } from './net.js';
 import { TEAMS, KITS, CARDS, CARD_LIST, TRANK, TIER_NAME } from './data.js';
 import { $, esc, shirtSVG, cardHTML } from './ui.js';
+import { openReplay, encode } from './replay.js';
 
 let H = null, ME = null, CH = null;
 export const TITLES = ['Buteur né', 'Le Mur', 'Roi du dribble', 'Maître des packs', 'Chasseur de légendes', 'Capitaine', 'Pro de la retournée', 'Tacleur fou', 'Passeur de génie', 'Futur Ballon d\'Or', 'Supporter n°1', 'Débutant motivé'];
@@ -9,7 +10,9 @@ const ONLINE = new Map(); // uid -> {name, busy}
 let FRIENDS = [], UNREAD = {}, CHAT = null, TRADES = [];
 /** Messages rapides (pas de texte libre : pas d'insultes ni d'inconnus qui écrivent n'importe quoi) */
 export const MSGS = ['Salut ! 👋', 'On joue ? ⚽', 'GG ! 👏', 'Revanche ? 😤', 'Bien joué !', 'Trop fort 🔥', 'J\'arrive !', 'Pas maintenant, plus tard',
-  'T\'as eu quoi dans tes packs ?', 'J\'ai eu une légende !! 🤩', 'Merci !', 'Bonne nuit 😴', '😂', '👍', '⚽🔥', 'Viens dans ma salle !'];
+  'T\'as eu quoi dans tes packs ?', 'J\'ai eu une légende !! 🤩', 'Merci !', 'Bonne nuit 😴', '😂', '👍', '⚽🔥', 'Viens dans ma salle !',
+  'Quel but ! 😱', 'Tu veux échanger des cartes ?', 'Regarde mon replay 🎬', 'Encore une ?', 'J\'ai trop la rage 😭', 'Tu es trop fort 💪', 'À tout à l\'heure !', 'Ok !',
+  '❤️', '😎', '🏆', '🤝'];
 
 const kitOf = p => {
   if (p.avatar) { const k = KITS.find(x => x.id === p.avatar); if (k) return k.k; }
@@ -168,6 +171,7 @@ function renderProfile() {
       <div class="pstats">${stat(`${p.cards}<small>/${CARD_LIST.length}</small>`, 'cartes')}${stat(p.packs, 'packs ouverts')}${p.team_name ? stat(esc(p.team_name), 'son équipe') : ''}</div>
       <div class="pcards">${fav ? `<div class="pcard"><small>Carte favorite</small>${cardHTML(fav, { small: true })}</div>` : ''}${best.map((c, i) => `<div class="pcard"><small>${i ? 'Top ' + (i + 1) : 'Meilleure carte'}</small>${cardHTML(c, { small: true })}</div>`).join('')}${!fav && !best.length ? '<p class="muted">Pas encore de cartes.</p>' : ''}</div>
     </section>
+    <section class="setsec"><h3>Replays</h3><ul class="rplist" id="profRp"><li class="muted">Chargement…</li></ul></section>
     <section class="setsec"><h3>Derniers matchs en ligne</h3><ul class="recent">${recent || '<li class="muted">Aucun match en ligne pour l\'instant.</li>'}</ul></section>
   </div>`;
   const on = (x, f) => { const b = el.querySelector(`[data-x=${x}]`); if (b) b.onclick = f; };
@@ -180,6 +184,7 @@ function renderProfile() {
   on('chal', () => challenge({ id: p.id, display: p.display }));
   on('msg', () => { closeProfile(); openChat(p.id); });
   on('trade', () => { closeProfile(); openTradeWith(p.id, p.display); });
+  renderProfReplays(p);
   if (EDIT) {
     el.querySelectorAll('[data-av]').forEach(b => b.onclick = () => saveProfile({ avatar: b.dataset.av }));
     el.querySelectorAll('[data-fc]').forEach(b => b.onclick = () => saveProfile({ fav_card: b.dataset.fc || null }));
@@ -217,8 +222,14 @@ function renderChat(loading) {
   const canNotif = 'Notification' in window && Notification.permission === 'default';
   el.innerHTML = `<div class="box setbox chatbox"><div class="cardhead"><button class="fmain" data-x="prof"><span class="fav">${shirtSVG(kitOf(f))}<i class="dot ${on ? 'on' : ''}"></i></span><span class="fnm"><b>${esc(f.display)}</b><small>${on ? 'En ligne' : 'Hors ligne · il verra ton message plus tard'}</small></span></button>
       ${on ? '<button class="btn small chal" data-x="chal">Défier</button>' : ''}<button class="link" data-x="close">Fermer</button></div>
-    <div class="msgs" id="msgs">${loading ? '<p class="muted">Chargement…</p>' : CHAT.list.length ? CHAT.list.map(m => `<div class="bub ${m.mine ? 'me' : ''}"><span>${esc(MSGS[m.msg] ?? '…')}</span><time>${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</time></div>`).join('') : '<p class="muted">Pas encore de message. Dis-lui bonjour !</p>'}</div>
-    <div class="qmsgs">${MSGS.map((t, i) => `<button class="chip" data-m="${i}">${esc(t)}</button>`).join('')}</div>
+    <div class="msgs" id="msgs">${loading ? '<p class="muted">Chargement…</p>' : CHAT.list.length ? CHAT.list.map((m, i, a) => {
+      const day = new Date(m.created_at).toDateString(), prev = i ? new Date(a[i - 1].created_at).toDateString() : '';
+      const sep = day !== prev ? `<div class="msep">${new Date(m.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>` : '';
+      const lastMine = m.mine && !a.slice(i + 1).some(x => x.mine);
+      const body = m.msg === 31 ? (m.replay ? `<button class="rpmsg" data-rp="${m.replay}">🎬 <b>Replay</b><small>${esc(m.replay_title || 'Match')}</small><em>▶ Voir</em></button>` : '<span class="muted">🎬 Replay supprimé</span>') : `<span>${esc(MSGS[m.msg] ?? '…')}</span>`;
+      return `${sep}<div class="bub ${m.mine ? 'me' : ''} ${m.msg === 31 ? 'rp' : ''}">${body}<time>${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${lastMine && m.read ? ' · Vu ✓✓' : ''}</time></div>`;
+    }).join('') : '<p class="muted">Pas encore de message. Dis-lui bonjour !</p>'}</div>
+    <div class="qmsgs">${MSGS.map((t, i) => `<button class="chip" data-m="${i}">${esc(t)}</button>`).join('')}<button class="chip rpchip" data-x="rpsend">🎬 Envoyer un replay</button></div>
     <p class="hint">Messages rapides seulement, pour que ça reste sympa entre joueurs.${canNotif ? ' <button class="link" data-x="notif">Activer les notifications</button>' : ''}</p></div>`;
   const box = el.querySelector('#msgs'); box.scrollTop = box.scrollHeight;
   el.querySelector('[data-x=close]').onclick = closeChat;
@@ -226,6 +237,24 @@ function renderChat(loading) {
   const c = el.querySelector('[data-x=chal]'); if (c) c.onclick = () => { closeChat(); challenge(f); };
   const n = el.querySelector('[data-x=notif]'); if (n) n.onclick = () => Notification.requestPermission().then(() => renderChat());
   el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => sendMsg(f.id, +b.dataset.m));
+  el.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => playReplay(b.dataset.rp));
+  el.querySelector('[data-x=rpsend]').onclick = () => pickReplay(f);
+}
+async function pickReplay(f) {
+  const list = await listReplays(ME.id);
+  const el = $('#chat .qmsgs');
+  if (!list.length) { H.toast('Tu n\'as pas encore de replay. Sauvegarde-en un à la fin d\'un match.'); return; }
+  el.innerHTML = `<p class="hint" style="width:100%">Quel replay envoyer à ${esc(f.display)} ?</p>${list.map(r => `<button class="chip" data-sr="${r.id}">🎬 ${esc(r.title)}</button>`).join('')}<button class="chip" data-x="rpback">Annuler</button>`;
+  el.querySelectorAll('[data-sr]').forEach(b => b.onclick = () => sendReplay(f.id, b.dataset.sr, b.textContent.replace('🎬 ', '')));
+  el.querySelector('[data-x=rpback]').onclick = () => renderChat();
+}
+export async function sendReplay(to, id, title) {
+  const { data, error } = await sb.rpc('send_replay', { p_to: to, p_replay: id });
+  if (error) { H.toast(/too_fast/.test(error.message) ? 'Doucement ! Attends un peu.' : 'Replay non envoyé. Réessaie.'); return false; }
+  CH?.send({ type: 'broadcast', event: 'msg', payload: { to, from: ME.id, name: ME.display, m: 31, id: data.id, replay: id, title } });
+  if (CHAT && CHAT.id === to) { CHAT.list.push({ id: data.id, mine: true, msg: 31, replay: id, replay_title: title, created_at: data.at || new Date().toISOString() }); renderChat(); }
+  else H.toast('Replay envoyé !');
+  return true;
 }
 async function sendMsg(to, m) {
   const { data, error } = await sb.rpc('send_msg', { p_to: to, p_msg: m });
@@ -236,12 +265,12 @@ async function sendMsg(to, m) {
 function gotMsg(p) {
   if (!friendOf(p.from)) { loadFriends(); }
   if (CHAT && CHAT.id === p.from) {
-    CHAT.list.push({ id: p.id, mine: false, msg: p.m, created_at: new Date().toISOString() }); renderChat();
+    CHAT.list.push({ id: p.id, mine: false, msg: p.m, replay: p.replay, replay_title: p.title, created_at: new Date().toISOString() }); renderChat();
     sb.rpc('my_msgs', { p_with: p.from }); // marque comme lu
     H.sound?.(true); return;
   }
   UNREAD[p.from] = (UNREAD[p.from] || 0) + 1; renderFriends();
-  notify(`💬 ${p.name}`, MSGS[p.m] ?? '', () => openChat(p.from));
+  notify(`💬 ${p.name}`, p.m === 31 ? `🎬 t'a envoyé un replay : ${p.title || ''}` : MSGS[p.m] ?? '', () => openChat(p.from));
 }
 /** Notification dans le jeu (+ notification du téléphone si l'appli est en arrière-plan et que c'est autorisé) */
 let notT = null;
@@ -335,4 +364,43 @@ function renderTradeNew() {
   };
 }
 function keepScroll(f) { const b = $('#trade .setbox'), y = b?.scrollTop || 0; f(); const n = $('#trade .setbox'); if (n) n.scrollTop = y; }
+
+/* ---------- Replays ---------- */
+export async function listReplays(owner) {
+  const { data } = await sb.from('replays').select('id,title,created_at,size').eq('owner', owner).order('created_at', { ascending: false }).limit(10);
+  return Array.isArray(data) ? data : [];
+}
+async function renderProfReplays(p) {
+  const list = await listReplays(p.id), el = $('#profRp'); if (!el || PROF?.id !== p.id) return;
+  const mine = p.id === ME.id, friends = FRIENDS.filter(f => f.status === 'accepted');
+  el.innerHTML = list.map(r => `<li class="rprow"><button class="rpplay" data-rp="${r.id}">▶</button><span class="rpt"><b>${esc(r.title)}</b><small>${new Date(r.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></span>
+    ${mine ? `${friends.length ? `<button class="btn small" data-share="${r.id}" data-t="${esc(r.title)}">📤</button>` : ''}<button class="btn small" data-del="${r.id}" aria-label="Supprimer">🗑</button>` : ''}</li>`).join('')
+    || `<li class="muted">${mine ? 'Aucun replay. À la fin d\'un match, touche « 💾 Sauvegarder le replay ».' : 'Aucun replay partagé.'}</li>`;
+  el.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => playReplay(b.dataset.rp));
+  el.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { b.disabled = true; await sb.rpc('remove_replay', { p_id: b.dataset.del }); renderProfReplays(p); });
+  el.querySelectorAll('[data-share]').forEach(b => b.onclick = () => shareReplayPicker(b.dataset.share, b.dataset.t, b.closest('li')));
+}
+/** Petite liste d'amis sous un replay pour l'envoyer */
+export function shareReplayPicker(id, title, anchor) {
+  const friends = FRIENDS.filter(f => f.status === 'accepted');
+  document.querySelector('.rpshare')?.remove();
+  if (!friends.length) { H.toast('Ajoute d\'abord des amis pour partager tes replays.'); return; }
+  const d = document.createElement('div'); d.className = 'rpshare';
+  d.innerHTML = `<small>Envoyer à :</small>${friends.map(f => `<button class="chip" data-to="${f.id}">${esc(f.display)}</button>`).join('')}`;
+  anchor.after(d);
+  d.querySelectorAll('[data-to]').forEach(b => b.onclick = async () => { b.disabled = true; if (await sendReplay(b.dataset.to, id, title)) d.remove(); else b.disabled = false; });
+}
+export async function playReplay(id) {
+  H.toast('Chargement du replay…');
+  const { data, error } = await sb.from('replays').select('title,meta,data').eq('id', id).maybeSingle();
+  if (error || !data || !data.data) { H.toast('Ce replay n\'existe plus.'); return; }
+  openReplay({ data: data.data, meta: data.meta, title: data.title });
+}
+export async function saveReplay(rec, meta, title) {
+  const data = await encode(rec.data());
+  const { data: r, error } = await sb.rpc('save_replay', { p_title: title, p_meta: meta, p_data: data });
+  if (error) { H.toast(/too_big/.test(error.message) ? 'Replay trop long pour être sauvegardé.' : /too_fast/.test(error.message) ? 'Attends un peu avant de sauvegarder un autre replay.' : 'Sauvegarde impossible. Réessaie.'); return null; }
+  return { id: r.id, data };
+}
+export const friendsList = () => FRIENDS.filter(f => f.status === 'accepted');
 export { kitOf };

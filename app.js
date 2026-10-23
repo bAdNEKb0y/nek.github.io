@@ -7,7 +7,8 @@ import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundO
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
-import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf } from './social.js';
+import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList } from './social.js';
+import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -512,7 +513,7 @@ function renderDuel() {
   };
   $('#dRound').innerHTML = side(me) + '<div class="dvs">VS</div>' + side(op);
   const acts = $('#dActions'); acts.innerHTML = '';
-  const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = txt; b.onclick = fn; acts.appendChild(b); };
+  const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = txt; b.onclick = fn; acts.appendChild(b); return b; };
   if (D.done) {
     const w = D.sc[me] > D.sc[op] ? me : D.sc[op] > D.sc[me] ? op : -1;
     acts.insertAdjacentHTML('beforeend', `<div class="winner"><small>${w < 0 ? 'Égalité' : w === me ? 'Tu gagnes le duel !' : 'Vainqueur du duel'}</small><b>${w < 0 ? 'Match nul' : esc(D.names[w])}</b><span>${D.sc[me]} – ${D.sc[op]}${D.reason === 'cards' ? ' · plus assez de cartes' : D.reason === 'quit' ? ' · abandon' : ''}</span></div>`);
@@ -599,6 +600,7 @@ addEventListener('keyup', e => {
 function bPress() { if (LI.bDown) return; LI.bDown = true; LI.b++; }
 function bRelease() { if (!LI.bDown) return; localKick(1.3); LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
 function closeTop() {
+  if (!$('#replay').hidden) { closeReplay(); return true; }
   if (!$('#trade').hidden) { closeTrade(); return true; }
   if (!$('#chat').hidden) { closeChat(); return true; }
   if (!$('#profile').hidden) { closeProfile(); return true; }
@@ -674,6 +676,7 @@ function beginGame({ cfg, side, online, names, uids }) {
   g.onSnap = d => { const now = performance.now(); const dtA = now - g.lastSnapAt; if (dtA > 0 && dtA < 400) { g.ia = g.ia ? g.ia * .9 + dtA * .1 : dtA; g.jit = (g.jit || 0) * .9 + Math.abs(dtA - g.ia) * .1; } g.lastSnapAt = now; if (g.snaps.length && d.q <= g.snaps[g.snaps.length - 1].q) return; g.snaps.push({ at: now, q: d.q, s: d.s }); if (g.snaps.length > 30) g.snaps.shift(); };
   g.onEnd = d => { if (!g.done) finishGame(d); };
   g.forfeit = (iWin, msg) => { if (g.done) return; const sc = iWin ? [3, 0] : [0, 3]; finishGame({ forfeit: true, msg, score: side === 0 ? sc : [sc[1], sc[0]] }); };
+  g.rec = createRecorder();
   GAME = g; R.me = side; audio(); crowdStart();
   show('game'); $('#menu').hidden = true;
   R.resize(); requestAnimationFrame(() => R.resize());
@@ -754,6 +757,7 @@ function frame(now) {
       if (now - g.lastSnapAt > 15000 && !ROOM?.peer) g.forfeit(true, 'Ton adversaire s\'est déconnecté.');
       if (g.V?.end && !g.endTimer) g.endTimer = setTimeout(() => { if (!g.done) finishGame({ score: g.V.sc, partial: true }); }, 3000);
     }
+    if (g.V) g.rec?.push(g.V, now); // enregistrement du replay
     // Historique des 3 dernières secondes (pour le ralenti des buts)
     if (g.V) { (g.hist ||= []).push({ at: now, V: g.V }); while (g.hist.length && now - g.hist[0].at > 4200) g.hist.shift(); }
     // Ambiance : la foule monte quand le ballon approche d'un but
@@ -859,11 +863,25 @@ function renderEnd(g, sum, rating) {
     $('#endStats').hidden = false;
   } else { $('#endMvp').innerHTML = ''; $('#endStats').hidden = true; $('#endLineups').innerHTML = ''; }
   const acts = $('#endActions'); acts.innerHTML = '';
-  const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = txt; b.onclick = fn; acts.appendChild(b); };
+  const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = txt; b.onclick = fn; acts.appendChild(b); return b; };
   if (g.online && ROOM && !sum.forfeit) mk('Revanche', 'primary', () => { renderLobby(); show('lobby'); });
   if (!g.online) mk('Rejouer', 'primary', () => startSolo());
   if (g.online) mk('Ouvrir des packs', '', async () => { if (ROOM) { const r = ROOM; ROOM = null; LOB = null; await r.leave(); } await loadCollection(); openShop(); });
   mk('Retour à l\'accueil', '', async () => { if (ROOM) await leaveRoom(); else { ME = await loadProfile() || ME; renderHome(); show('home'); } });
+  // Replay du match : revoir, sauvegarder, envoyer à un ami
+  const rec = g.rec;
+  if (rec && rec.frames > 30) {
+    const title = `${M.team[0].short} ${sc[0]}–${sc[1]} ${M.team[1].short}${g.online ? '' : ' (ordi)'}`.slice(0, 80);
+    const meta = { team: M.team.map(t => ({ name: t.name, short: t.short, h: t.h, c1: t.c1, c2: t.c2 })), kit: M.kit, players: M.players.map(p => ({ t: p.t, i: p.i, gk: p.gk, num: p.num, name: p.name })), names: g.names, dur: M.dur, score: sc };
+    mk('▶ Revoir le match', '', async () => openReplay({ data: await encode(rec.data()), meta, title }));
+    const sv = mk('💾 Sauvegarder le replay', '', async () => {
+      sv.disabled = true; sv.textContent = 'Sauvegarde…';
+      const r = await saveReplay(rec, meta, title);
+      if (!r) { sv.disabled = false; sv.textContent = '💾 Sauvegarder le replay'; return; }
+      sv.textContent = '✓ Replay sauvegardé';
+      if (friendsList().length) { const sh = mk('📤 Envoyer à un ami', '', () => shareReplayPicker(r.id, title, sh)); }
+    });
+  }
 }
 
 /* ---------- Démarrage ---------- */

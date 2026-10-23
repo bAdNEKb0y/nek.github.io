@@ -569,3 +569,48 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 #bTrades{position:relative;font-size:13px;padding:6px 10px}
 #bTrades .badge{position:absolute;top:-7px;right:-7px;margin:0}
 .cardhead #friendsCount{margin-left:auto}
+/* Téléphone en paysage : accueil plus compact pour tout voir d'un coup d'œil */
+@media (max-height:500px) and (orientation:landscape){
+  .topbar{margin-bottom:8px}
+  .homegrid{gap:10px}.homegrid .col{gap:8px}
+  .play-tile{padding:10px 16px}.play-tile b{font-size:30px}.play-tile small{font-size:12px}
+  .tile{padding:10px 12px}.tile b{font-size:19px}.tile span{font-size:12px}
+  .homegrid .hint{font-size:12px}
+  .card{padding:10px;gap:8px}.card h2{font-size:20px}
+  .board li{padding:4px}.board .pts{font-size:17px}
+  .friends{max-height:200px}
+  .me{padding:4px 10px 4px 4px}.me .av{width:30px;height:30px}.me b{font-size:16px}.me .elo{font-size:18px}
+  .gear{width:34px;height:34px}
+}
+.toast{max-width:min(520px,calc(100% - 24px))}
+/* Lecteur de replay */
+.overlay.rpov{z-index:12;display:block;background:#0b1411;touch-action:none}
+.rp-cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.rp-top{position:absolute;left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));top:56px;display:flex;align-items:center;gap:10px;pointer-events:none}
+.rp-live{background:#f0776b;color:#fff;font:800 13px/1 var(--f-display);letter-spacing:.08em;padding:5px 9px;border-radius:5px}
+.rp-top b{font-family:var(--f-display);font-weight:800;font-size:18px;text-shadow:0 2px 6px rgba(0,0,0,.7)}
+.rp-x{margin-left:auto;pointer-events:auto;width:40px;height:40px;border-radius:50%;background:rgba(6,12,10,.7);border:1px solid var(--line);font-size:18px}
+.rp-bar{position:absolute;left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));display:flex;align-items:center;gap:8px;
+  background:rgba(6,12,10,.82);border:1px solid var(--line);border-radius:14px;padding:8px 10px;backdrop-filter:blur(6px)}
+.rp-b{min-width:42px;height:38px;border-radius:10px;border:1px solid var(--line);font-weight:800;font-size:15px;padding:0 8px}
+.rp-track{position:relative;flex:1;min-width:0}
+.rp-track input{width:100%;accent-color:var(--flood);height:28px}
+.rp-goals{position:absolute;inset:-14px 8px auto;height:0}
+.rp-g{position:absolute;top:-6px;transform:translateX(-50%);font-size:14px;line-height:1;padding:2px}
+.rp-time{font:700 15px/1 var(--f-display);min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
+.rp-load{position:absolute;inset:0;display:grid;place-items:center;margin:0;color:var(--muted)}
+/* Replays dans le profil et les messages */
+.rplist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.rprow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
+.rpplay{width:40px;height:40px;border-radius:50%;background:var(--flood);color:var(--night);font-size:16px;flex:none}
+.rpt{flex:1;min-width:0}.rpt b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rpt small{color:var(--muted);font-size:12px}
+.rpshare{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 2px 10px}
+.rpshare small{color:var(--muted);width:100%}
+.rpmsg{display:grid;grid-template-columns:auto 1fr;gap:0 8px;text-align:left;color:inherit;align-items:center}
+.rpmsg b{grid-column:2}.rpmsg small{grid-column:2;color:var(--muted);font-size:12px}.rpmsg em{grid-column:1/-1;font-style:normal;font-weight:800;color:var(--flood);margin-top:4px}
+.bub.rp{min-width:180px}
+.msep{align-self:center;font-size:11px;color:var(--muted);text-transform:capitalize;padding:6px 0 2px}
+.rpchip{border-color:var(--flood)!important;color:var(--flood)!important}
+.rp-g{top:-10px;font:800 10px/1 var(--f-display);letter-spacing:.06em;background:var(--flood);color:var(--night);border-radius:6px;padding:3px 5px}
+.rp-goals{inset:-8px 8px auto}
+.rp-track{padding-top:6px}
