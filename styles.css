@@ -727,3 +727,28 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
   .pacts .btn.small{padding:5px 10px;font-size:13px}
   #chat .qwrap{padding-top:4px}
 }
+/* Chat : saisie libre, messages rapides repliables, vocaux */
+#chat .setbox.chatbox{grid-template-rows:auto minmax(0,1fr) auto auto auto}
+.ctext{display:flex;align-items:center;gap:6px;padding:8px 0 4px;border-top:1px solid var(--line)}
+.ctext input{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:10px 14px;font-size:16px;color:var(--chalk)}
+.ctext input:focus{outline:none;border-color:var(--flood)}
+.cbtn{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:var(--panel);border:1px solid var(--line)}
+.cbtn.on{background:var(--flood);border-color:var(--flood)}
+.cbtn.send{background:var(--flood);color:var(--night);font-weight:800}
+.ctext.rec{gap:10px}
+.ctext.rec .muted{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recdot{width:12px;height:12px;border-radius:50%;background:var(--loss);flex:none;animation:recp 1s infinite}
+@keyframes recp{50%{opacity:.3}}
+.rectime{font-variant-numeric:tabular-nums}
+.vmsg{display:flex;align-items:center;gap:8px;min-width:150px;padding:2px 0;color:inherit}
+.vmsg i{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--flood);color:var(--night);font-style:normal;font-size:12px;flex:none}
+.vwave{flex:1;height:18px;background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 5px);opacity:.45;-webkit-mask-image:linear-gradient(0deg,transparent 0 20%,#000 20% 80%,transparent 80%);border-radius:2px}
+.vmsg.playing .vwave{opacity:.9;animation:vw .8s infinite alternate}
+@keyframes vw{to{opacity:.4}}
+.vmsg b{font-size:12px;font-variant-numeric:tabular-nums}
+#chat .qwrap{border-top:1px solid var(--line)}
+@media (max-height:500px){.cbtn{width:36px;height:36px;font-size:15px}.ctext input{padding:7px 12px}.ctext{padding:5px 0 2px}}
+#chat .setbox.chatbox{grid-template-columns:minmax(0,1fr)}
+#chat .chatbox>*{min-width:0}
+.ctext .btn.small{text-transform:none;padding:6px 12px;font-size:14px}
+@media (max-width:420px){.ctext.rec .muted{display:none}}

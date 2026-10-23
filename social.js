@@ -4,7 +4,7 @@ import { TEAMS, KITS, CARDS, CARD_LIST, TRANK, TIER_NAME } from './data.js';
 import { $, esc, shirtSVG, cardHTML } from './ui.js';
 import { openReplay, encode } from './replay.js';
 import { sendPush, enablePush } from './push.js';
-import { WORDS, WGROUPS, EMOJIS, EMO, sentence } from './chatdata.js';
+import { sentence } from './chatdata.js'; // anciennes phrases construites (affichage seulement)
 
 let H = null, ME = null, CH = null;
 export const TITLES = ['Buteur né', 'Le Mur', 'Roi du dribble', 'Maître des packs', 'Chasseur de légendes', 'Capitaine', 'Pro de la retournée', 'Tacleur fou', 'Passeur de génie', 'Futur Ballon d\'Or', 'Supporter n°1', 'Débutant motivé'];
@@ -238,7 +238,7 @@ export async function openChat(id) {
   if (!CHAT || CHAT.id !== id) return;
   CHAT.list = Array.isArray(data) ? data : []; delete UNREAD[id]; renderFriends(); renderChat();
 }
-export function closeChat() { CHAT = null; const el = $('#chat'); el.hidden = true; el.innerHTML = ''; }
+export function closeChat() { if (REC) stopRec(false); if (PLAY) { PLAY.a.pause(); PLAY = null; } CHAT = null; const el = $('#chat'); el.hidden = true; el.innerHTML = ''; }
 function renderChat(loading) {
   const el = $('#chat'), f = friendOf(CHAT.id), on = isOnline(f.id);
   const canNotif = 'Notification' in window && Notification.permission === 'default';
@@ -248,69 +248,105 @@ function renderChat(loading) {
       const day = new Date(m.created_at).toDateString(), prev = i ? new Date(a[i - 1].created_at).toDateString() : '';
       const sep = day !== prev ? `<div class="msep">${new Date(m.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>` : '';
       const lastMine = m.mine && !a.slice(i + 1).some(x => x.mine);
-      const body = m.msg === 30 ? `<span>${esc(sentence(m.parts))}</span>` : m.msg === 31 ? (m.replay ? `<button class="rpmsg" data-rp="${m.replay}">🎬 <b>Replay</b><small>${esc(m.replay_title || 'Match')}</small><em>▶ Voir</em></button>` : '<span class="muted">🎬 Replay supprimé</span>') : `<span>${esc(MSGS[m.msg] ?? '…')}</span>`;
+      const body = m.msg === 29 ? `<span>${esc(m.body || '')}</span>` : m.msg === 28 ? voiceHTML(m) : m.msg === 30 ? `<span>${esc(sentence(m.parts))}</span>` : m.msg === 31 ? (m.replay ? `<button class="rpmsg" data-rp="${m.replay}">🎬 <b>Replay</b><small>${esc(m.replay_title || 'Match')}</small><em>▶ Voir</em></button>` : '<span class="muted">🎬 Replay supprimé</span>') : `<span>${esc(MSGS[m.msg] ?? '…')}</span>`;
       return `${sep}<div class="bub ${m.mine ? 'me' : ''} ${m.msg === 31 ? 'rp' : ''}">${body}<time>${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${lastMine && m.read ? ' · Vu ✓✓' : ''}</time></div>`;
     }).join('') : '<p class="muted">Pas encore de message. Dis-lui bonjour !</p>'}</div>
-    <div class="qwrap">${quickHTML()}</div>
-    <p class="hint">Messages rapides seulement, pour que ça reste sympa entre joueurs.${canNotif ? ' <button class="link" data-x="notif">Activer les notifications</button>' : ''}</p></div>`;
+    ${CHAT.quick ? `<div class="qwrap">${quickHTML()}</div>` : ''}
+    ${REC ? `<div class="ctext rec"><span class="recdot"></span><b class="rectime">0:00</b><span class="muted">Enregistrement… (30 s max)</span><button class="btn small" data-x="recno">Annuler</button><button class="btn small primary" data-x="recok">Envoyer 🎤</button></div>`
+      : `<form class="ctext" data-x="form"><button type="button" class="cbtn${CHAT.quick ? ' on' : ''}" data-x="quick" aria-label="Messages rapides">⚡</button><input id="ctin" maxlength="200" placeholder="Écris un message…" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" aria-label="Message">
+      <button type="button" class="cbtn" data-x="mic" aria-label="Message vocal">🎤</button><button class="cbtn send" type="submit" aria-label="Envoyer">➤</button></form>`}
+    <p class="hint">Les gros mots, les liens et les numéros sont masqués automatiquement.${canNotif ? ' <button class="link" data-x="notif">Activer les notifications</button>' : ''}</p></div>`;
   const box = el.querySelector('#msgs'); box.scrollTop = box.scrollHeight;
   el.querySelector('[data-x=close]').onclick = closeChat;
   el.querySelector('[data-x=prof]').onclick = () => { const id = f.id; closeChat(); openProfile(id); };
   const c = el.querySelector('[data-x=chal]'); if (c) c.onclick = () => { closeChat(); challenge(f); };
   const n = el.querySelector('[data-x=notif]'); if (n) n.onclick = async () => { const r = await enablePush(); H.toast(r === 'on' ? '🔔 Notifications activées !' : r === 'ios-home' ? 'Sur iPhone : Partager ⬆️ → « Sur l\'écran d\'accueil », puis ouvre le jeu depuis l\'icône.' : 'Notifications non activées.'); renderChat(); };
   el.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => playReplay(b.dataset.rp));
-  bindQuick(f);
+  el.querySelectorAll('[data-voice]').forEach(b => b.onclick = () => playVoice(b));
+  if (CHAT.quick) bindQuick(f);
+  const form = el.querySelector('[data-x=form]');
+  if (form) {
+    const inp = form.querySelector('#ctin'); inp.value = CHAT.draft || '';
+    inp.oninput = () => { CHAT.draft = inp.value; };
+    if (CHAT.focus) { CHAT.focus = false; inp.focus(); }
+    form.onsubmit = e => { e.preventDefault(); const t = inp.value.trim(); if (!t) return; CHAT.draft = ''; CHAT.focus = true; sendText(f.id, t); };
+    form.querySelector('[data-x=quick]').onclick = () => { CHAT.quick = !CHAT.quick; renderChat(); };
+    form.querySelector('[data-x=mic]').onclick = () => startRec(f);
+  }
+  const rok = el.querySelector('[data-x=recok]'); if (rok) rok.onclick = () => stopRec(true);
+  const rno = el.querySelector('[data-x=recno]'); if (rno) rno.onclick = () => stopRec(false);
 }
 /* Messages rapides rangés par onglets (Récents, Salut, Match, Cartes, Émojis) */
 function quickHTML() {
   const rec = lsGet(QR, []).filter(i => MSGS[i]);
-  const tabs = [{ id: 'phrase', n: '✏️ Phrase' }, ...(rec.length ? [{ id: 'rec', n: '⭐ Récents', m: rec }] : []), ...MSG_CATS];
-  let cur = lsGet(QK, rec.length ? 'rec' : 'salut'); if (!tabs.some(t => t.id === cur)) cur = tabs[1].id;
+  const tabs = [...(rec.length ? [{ id: 'rec', n: '⭐ Récents', m: rec }] : []), ...MSG_CATS];
+  let cur = lsGet(QK, rec.length ? 'rec' : 'salut'); if (!tabs.some(t => t.id === cur)) cur = tabs[0].id;
   const tab = tabs.find(t => t.id === cur);
-  const head = `<div class="qtabs" role="tablist">${tabs.map(t => `<button role="tab" class="qtab${t.id === 'phrase' ? ' qphr' : ''}" data-qt="${t.id}" aria-selected="${t.id === cur}">${esc(t.n)}</button>`).join('')}</div>`;
-  if (cur === 'phrase') return head + builderHTML();
+  const head = `<div class="qtabs" role="tablist">${tabs.map(t => `<button role="tab" class="qtab" data-qt="${t.id}" aria-selected="${t.id === cur}">${esc(t.n)}</button>`).join('')}</div>`;
   return `${head}
     <div class="qmsgs">${tab.m.map(i => `<button class="chip" data-m="${i}">${esc(MSGS[i])}</button>`).join('')}<button class="chip rpchip" data-x="rpsend">🎬 Envoyer un replay</button></div>`;
 }
-/* Constructeur de phrase « à trous » : …… …… …… ; on touche un trou et on choisit un mot parmi plusieurs */
-const SLOTS = [
-  { id: 'mots', n: 'Début' }, { id: 'qui', n: 'Qui' }, { id: 'action', n: 'Fait quoi' }, { id: 'quoi', n: 'Quoi' },
-  { id: 'quand', n: 'Quand / où' }, { id: 'ponct', n: 'Fin' }, { id: 'emo', n: 'Émoji' },
-].map(x => ({ ...x, w: x.id === 'emo' ? EMOJIS.map((_, i) => EMO + i) : WGROUPS.find(g => g.id === x.id).w }));
-const PB = { sl: SLOTS.map(() => null), cur: 1 };
-const label = x => x >= EMO ? EMOJIS[x - EMO] : WORDS[x];
-const pbParts = () => PB.sl.filter(x => x != null);
-function builderHTML() {
-  const cur = SLOTS[PB.cur], n = pbParts().length, prev = sentence(pbParts());
-  return `<div class="pbuild">
-    <div class="pslots">${SLOTS.map((x, i) => `<button class="pslot${PB.sl[i] != null ? ' full' : ''}${i === PB.cur ? ' on' : ''}" data-ps="${i}" aria-label="${esc(x.n)}"><small>${esc(x.n)}</small><b>${PB.sl[i] != null ? esc(label(PB.sl[i])) : '……'}</b></button>`).join('')}</div>
-    <div class="pprev">${n ? `« ${esc(prev)} »` : '<span class="muted">Touche un trou puis choisis un mot. Tous les trous sont facultatifs.</span>'}</div>
-    <div class="pacts"><button class="btn small" data-pb="clear" ${n ? '' : 'disabled'}>Effacer</button>${PB.sl[PB.cur] != null ? `<button class="btn small" data-pb="hole">Vider « ${esc(cur.n)} »</button>` : ''}
-      <button class="btn small primary" data-pb="send" ${n ? '' : 'disabled'}>Envoyer ➤</button></div>
-    <div class="qmsgs pwords">${cur.w.map(x => `<button class="chip${PB.sl[PB.cur] === x ? ' sel' : ''}" data-pw="${x}">${esc(label(x))}</button>`).join('')}</div></div>`;
-}
-async function sendSentence(to) {
-  const parts = pbParts(); if (!parts.length) return;
-  const { data, error } = await sb.rpc('send_sentence', { p_to: to, p_parts: parts });
-  if (error) { H.toast(/too_fast/.test(error.message) ? 'Doucement ! Attends un peu avant de renvoyer un message.' : /not_friends/.test(error.message) ? 'Vous n\'êtes plus amis.' : 'Message non envoyé. Réessaie.'); return; }
-  PB.sl = SLOTS.map(() => null); PB.cur = 1;
-  CH?.send({ type: 'broadcast', event: 'msg', payload: { to, from: ME.id, name: ME.display, m: 30, parts, id: data.id } });
+/* ---------- Texte libre (filtré par le serveur) ---------- */
+async function sendText(to, text) {
+  const { data, error } = await sb.rpc('send_text', { p_to: to, p_body: text.slice(0, 200) });
+  if (error) { H.toast(/too_fast/.test(error.message) ? 'Doucement ! Attends un peu avant de renvoyer un message.' : /not_friends/.test(error.message) ? 'Vous n\'êtes plus amis.' : 'Message non envoyé. Réessaie.'); if (CHAT) { CHAT.draft = text; renderChat(); } return; }
+  CH?.send({ type: 'broadcast', event: 'msg', payload: { to, from: ME.id, name: ME.display, m: 29, id: data.id } });
   if (!isOnline(to)) sendPush({ kind: 'msg', id: data.id });
-  if (CHAT && CHAT.id === to) { CHAT.list.push({ id: data.id, mine: true, msg: 30, parts, created_at: data.at || new Date().toISOString() }); renderChat(); }
+  if (CHAT && CHAT.id === to) { CHAT.list.push({ id: data.id, mine: true, msg: 29, body: data.body, created_at: data.at || new Date().toISOString() }); renderChat(); }
+}
+/* ---------- Messages vocaux (30 s max, écoutables seulement par toi et ton ami) ---------- */
+let REC = null;
+const fmtS = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+function voiceHTML(m) { const s = m.parts?.[0] || 1; return `<button class="vmsg" data-voice="${esc(m.body || '')}" aria-label="Écouter le message vocal"><i>▶</i><span class="vwave"></span><b>${fmtS(s)}</b></button>`; }
+async function startRec(f) {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { H.toast('Les messages vocaux ne marchent pas sur ce navigateur.'); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+  catch { H.toast('Micro refusé. Autorise le micro dans les réglages du téléphone pour envoyer un vocal.'); return; }
+  const type = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported?.(t)) || '';
+  const mr = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
+  const chunks = [];
+  REC = { mr, stream, chunks, f, t0: Date.now(), send: false };
+  mr.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+  mr.onstop = () => finishRec();
+  mr.start(250);
+  REC.timer = setInterval(() => { const s = Math.floor((Date.now() - REC.t0) / 1000), el = $('#chat .rectime'); if (el) el.textContent = fmtS(s); if (s >= 30) stopRec(true); }, 250);
+  renderChat();
+}
+function stopRec(send) { if (!REC) return; REC.send = send; clearInterval(REC.timer); try { REC.mr.state !== 'inactive' ? REC.mr.stop() : finishRec(); } catch { finishRec(); } }
+async function finishRec() {
+  const r = REC; if (!r) return; REC = null;
+  r.stream.getTracks().forEach(t => t.stop());
+  if (CHAT) renderChat();
+  const secs = Math.max(1, Math.min(30, Math.round((Date.now() - r.t0) / 1000)));
+  if (!r.send) return;
+  if (Date.now() - r.t0 < 700) { H.toast('Trop court ! Parle un peu plus longtemps.'); return; }
+  const type = (r.mr.mimeType || 'audio/webm').split(';')[0], blob = new Blob(r.chunks, { type });
+  if (blob.size > 1000000) { H.toast('Vocal trop lourd. Fais-le plus court.'); return; }
+  const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+  const path = `${ME.id}/${Date.now()}.${ext}`;
+  H.toast('Envoi du vocal…');
+  const up = await sb.storage.from('voice').upload(path, blob, { contentType: type, upsert: false });
+  if (up.error) { H.toast('Vocal non envoyé. Vérifie ta connexion.'); return; }
+  const { data, error } = await sb.rpc('send_voice', { p_to: r.f.id, p_path: path, p_secs: secs });
+  if (error) { H.toast(/too_fast/.test(error.message) ? 'Doucement ! Attends un peu.' : 'Vocal non envoyé. Réessaie.'); return; }
+  CH?.send({ type: 'broadcast', event: 'msg', payload: { to: r.f.id, from: ME.id, name: ME.display, m: 28, id: data.id } });
+  if (!isOnline(r.f.id)) sendPush({ kind: 'msg', id: data.id });
+  if (CHAT && CHAT.id === r.f.id) { CHAT.list.push({ id: data.id, mine: true, msg: 28, body: path, parts: [secs], created_at: data.at || new Date().toISOString() }); renderChat(); }
+}
+let PLAY = null;
+async function playVoice(btn) {
+  const path = btn.dataset.voice;
+  if (PLAY) { PLAY.a.pause(); const same = PLAY.path === path; PLAY.btn.classList.remove('playing'); PLAY.btn.querySelector('i').textContent = '▶'; PLAY = null; if (same) return; }
+  const { data, error } = await sb.storage.from('voice').createSignedUrl(path, 600);
+  if (error || !data?.signedUrl) { H.toast('Ce vocal n\'est plus disponible.'); return; }
+  const a = new Audio(data.signedUrl);
+  PLAY = { a, path, btn }; btn.classList.add('playing'); btn.querySelector('i').textContent = '❚❚';
+  a.onended = a.onerror = () => { btn.classList.remove('playing'); btn.querySelector('i').textContent = '▶'; if (PLAY?.a === a) PLAY = null; };
+  a.play().catch(() => { H.toast('Impossible de lire ce vocal sur ce téléphone.'); a.onended(); });
 }
 function bindQuick(f) {
   const w = $('#chat .qwrap'); if (!w) return;
-  const re = () => { w.innerHTML = quickHTML(); bindQuick(f); };
-  w.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => {
-    PB.sl[PB.cur] = +b.dataset.pw;
-    const nx = SLOTS.findIndex((_, i) => i > PB.cur && PB.sl[i] == null); if (nx >= 0) PB.cur = nx; // on passe au trou suivant
-    re();
-  });
-  w.querySelectorAll('[data-ps]').forEach(b => b.onclick = () => { PB.cur = +b.dataset.ps; re(); });
-  const act = k => w.querySelector(`[data-pb=${k}]`);
-  if (act('hole')) act('hole').onclick = () => { PB.sl[PB.cur] = null; re(); };
-  if (act('clear')) act('clear').onclick = () => { PB.sl = SLOTS.map(() => null); PB.cur = 1; re(); };
-  if (act('send')) act('send').onclick = e => { e.currentTarget.disabled = true; sendSentence(f.id); };
   w.querySelectorAll('[data-qt]').forEach(b => b.onclick = () => { lsSet(QK, b.dataset.qt); w.innerHTML = quickHTML(); bindQuick(f); });
   w.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
     const m = +b.dataset.m; lsSet(QR, [m, ...lsGet(QR, []).filter(x => x !== m)].slice(0, 10));
@@ -345,12 +381,16 @@ async function sendMsg(to, m) {
 function gotMsg(p) {
   if (!friendOf(p.from)) { loadFriends(); }
   if (CHAT && CHAT.id === p.from) {
-    CHAT.list.push({ id: p.id, mine: false, msg: p.m, parts: p.parts, replay: p.replay, replay_title: p.title, created_at: new Date().toISOString() }); renderChat();
-    sb.rpc('my_msgs', { p_with: p.from }); // marque comme lu
+    if (p.m === 29 || p.m === 28 || p.m === 30) { // texte libre / vocal : on relit depuis le serveur (texte filtré)
+      sb.rpc('my_msgs', { p_with: p.from }).then(({ data }) => { if (CHAT && CHAT.id === p.from && Array.isArray(data) && !REC) { CHAT.list = data; renderChat(); } });
+    } else {
+      CHAT.list.push({ id: p.id, mine: false, msg: p.m, replay: p.replay, replay_title: p.title, created_at: new Date().toISOString() }); renderChat();
+      sb.rpc('my_msgs', { p_with: p.from }); // marque comme lu
+    }
     H.sound?.(true); return;
   }
   UNREAD[p.from] = (UNREAD[p.from] || 0) + 1; renderFriends();
-  notify(`💬 ${p.name}`, p.m === 31 ? `🎬 t'a envoyé un replay : ${p.title || ''}` : p.m === 30 ? sentence(p.parts) : MSGS[p.m] ?? '', () => openChat(p.from));
+  notify(`💬 ${p.name}`, p.m === 31 ? `🎬 t'a envoyé un replay : ${p.title || ''}` : p.m === 29 ? '✉️ Nouveau message' : p.m === 28 ? '🎤 Message vocal' : p.m === 30 ? sentence(p.parts) : MSGS[p.m] ?? '', () => openChat(p.from));
 }
 /** Notification dans le jeu (+ notification du téléphone si l'appli est en arrière-plan et que c'est autorisé) */
 let notT = null;
