@@ -48,7 +48,7 @@
   <section id="home" class="screen" hidden>
     <header class="topbar">
       <div class="logo">FOOT <span>DE POCHE</span></div>
-      <div class="hdr-right"><span class="coins" id="coinsHome" title="Pièces"></span><div class="me" id="meCard" role="button" tabindex="0" aria-label="Mon profil" title="Mon profil"></div><button class="gear" id="bSettings" aria-label="Paramètres" title="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8.6-2.1-.1-2.8 2-1.6-2-3.4-2.4.9-2.4-1.4-.4-2.6h-4l-.4 2.6-2.4 1.4-2.4-.9-2 3.4 2 1.6-.1 2.8-1.9 1.6 2 3.4 2.4-.9 2.4 1.4.4 2.6h4l.4-2.6 2.4-1.4 2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button></div>
+      <div class="hdr-right"><button class="adminbtn" id="bAdmin" hidden aria-label="Panel admin" title="Panel admin">🛠<span class="adb" id="adminBadge" hidden></span></button><span class="coins" id="coinsHome" title="Pièces"></span><div class="me" id="meCard" role="button" tabindex="0" aria-label="Mon profil" title="Mon profil"></div><button class="gear" id="bSettings" aria-label="Paramètres" title="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8.6-2.1-.1-2.8 2-1.6-2-3.4-2.4.9-2.4-1.4-.4-2.6h-4l-.4 2.6-2.4 1.4-2.4-.9-2 3.4 2 1.6-.1 2.8-1.9 1.6 2 3.4 2.4-.9 2.4 1.4.4 2.6h4l.4-2.6 2.4-1.4 2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button></div>
     </header>
     <div class="homegrid">
       <div class="col">
@@ -120,7 +120,7 @@
     </header>
     <div class="wrap1200">
       <div class="prog" id="prog"></div>
-      <nav class="tabs" id="shopTabs"><button data-tab="packs" aria-selected="true">Packs</button><button data-tab="coll" aria-selected="false">Collection</button></nav>
+      <nav class="tabs" id="shopTabs"><button data-tab="packs" aria-selected="true">Packs</button><button data-tab="coll" aria-selected="false">Collection</button><button data-tab="coins" aria-selected="false">💶 Pièces</button></nav>
       <div id="shopBody"></div>
     </div>
   </section>
@@ -198,6 +198,7 @@
   <div id="pack" class="overlay pk" hidden></div>
   <div id="picker" class="overlay sheet" hidden></div>
   <div id="tuto" class="overlay tuto" hidden></div>
+  <div id="admin" class="overlay sheet setov profov" hidden></div>
   <div id="settings" class="overlay sheet setov" hidden></div>
   <div id="profile" class="overlay sheet setov profov" hidden></div>
   <div id="chat" class="overlay sheet setov profov" hidden></div>

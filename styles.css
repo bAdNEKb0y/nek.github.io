@@ -616,3 +616,69 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .rp-track{padding-top:6px}
 .pushrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .pushrow .setlab small b{color:var(--chalk)}
+
+/* ---------- Pièces en argent réel ---------- */
+.cshop{display:grid;gap:14px;padding-bottom:20px}
+.cs-how{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:6px}
+.cs-how ol{margin:0;padding-left:20px;display:grid;gap:3px}
+.cs-how small{color:var(--muted)}
+.cs-offers{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.cs-off{position:relative;display:grid;gap:6px;justify-items:center;padding:18px 10px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(160deg,var(--panel2),var(--panel));min-width:0}
+.cs-off .coins{font-size:22px;font-weight:800}
+.cs-off b{font-family:var(--f-display);font-size:20px;color:var(--flood)}
+.cs-off i{position:absolute;top:-8px;right:8px;font-style:normal;font-size:11px;font-weight:800;background:var(--flood);color:#1a1405;border-radius:99px;padding:2px 8px}
+.cs-off:not(:disabled):active{transform:scale(.97)}
+.cs-off:disabled{opacity:.45}
+.cs-confirm{background:var(--panel);border:2px solid var(--flood);border-radius:14px;padding:16px;display:grid;gap:8px}
+.cs-confirm p{margin:0;font-size:17px}.cs-confirm small{color:var(--muted)}
+.cs-confirm .row,.adbox .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.cs-list,.ad-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.cs-row,.ad-req{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.cs-row>div,.ad-who{flex:1;min-width:0}
+.cs-row small,.ad-who small{display:block;color:var(--muted);font-size:12px}
+.cs-st{font-size:13px;font-weight:700;color:var(--muted)}
+.cs-row.approved .cs-st,.ad-req.approved .cs-st{color:var(--win)}
+.cs-row.refused .cs-st,.ad-req.refused .cs-st{color:var(--loss)}
+.cs-row.pending,.ad-req.pending{border-color:var(--flood)}
+
+/* ---------- Panel admin ---------- */
+.adminbtn{position:relative;width:40px;height:40px;border-radius:10px;border:1px solid var(--flood);background:var(--panel);font-size:18px;display:grid;place-items:center;flex:none}
+.adb{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--loss);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px}
+.adtabs .adb{position:static;display:inline-grid;margin-left:4px}
+.adb[hidden]{display:none!important}
+.ad-live{font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--win);margin-left:auto;margin-right:8px;animation:adp 2s infinite}
+@keyframes adp{50%{opacity:.4}}
+.adtabs{margin:10px 0 4px;position:sticky;top:calc(max(12px,env(safe-area-inset-top)) + 46px);z-index:2;background:var(--night)}
+.ad-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:8px 0}
+.ad-kpis>div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0}
+.ad-kpis small{display:block;color:var(--muted);font-size:12px}
+.ad-kpis b{font-family:var(--f-display);font-size:20px;overflow-wrap:anywhere}
+.ad-amt{display:grid;justify-items:end;gap:2px;flex:none}
+.ad-amt b{color:var(--flood);font-size:14px}
+.ad-acts{display:flex;gap:8px;flex-wrap:wrap;width:100%}
+.ad-acts .btn{flex:1}
+.btn.danger{border-color:var(--loss);color:var(--loss)}
+.ad-tools{display:flex;gap:8px;flex-wrap:wrap}
+.ad-tools input,.ad-tools select,#adAnn{flex:1 1 140px;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--chalk);font:inherit;font-size:16px}
+#adAnn{width:100%;resize:vertical;box-sizing:border-box}
+.ad-user{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:inherit}
+.ad-user.banned{opacity:.6}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#55655d;margin-right:6px;flex:none;vertical-align:middle}
+.dot.on{background:var(--win);box-shadow:0 0 0 3px rgba(127,217,154,.2)}
+.tag{font-style:normal;font-size:10px;font-weight:800;text-transform:uppercase;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:1px 5px;color:var(--flood)}
+.tag.red{color:var(--loss);border-color:var(--loss)}
+.ad-card{display:grid;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:8px}
+.ad-card h3{margin:0;font-size:20px}
+.ad-quick{display:flex;gap:6px;flex-wrap:wrap}
+.ad-list.log li{background:var(--panel);border-radius:10px;padding:8px 12px;font-size:14px;overflow-wrap:anywhere}
+.ad-list.log small{display:block;color:var(--muted);font-size:12px}
+.invite.bank{z-index:30}
+.tabs{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:1fr}
+.tabs button{font-size:clamp(13px,3.6vw,18px);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+#shopTabs{max-width:520px}
+.adtabs{max-width:none}
+.adbox .cardhead h2{font-size:clamp(18px,5vw,26px);white-space:nowrap}
+.ad-acts .btn{min-height:44px}
+@media (max-width:520px){.adtabs{grid-auto-flow:row;grid-template-columns:repeat(2,1fr);grid-auto-columns:auto}}
+.adbox .hint{margin:6px 0;position:static}
+.ad-list{margin-top:4px}

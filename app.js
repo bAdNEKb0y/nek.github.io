@@ -10,6 +10,7 @@ import { createRenderer, pickText, SIDE_COL } from './render.js';
 import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
+import { initBank, stopBank, renderCoinShop, refreshCoinShop, openAdmin, closeAdmin } from './bank.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -86,6 +87,7 @@ async function loadProfile() {
 async function afterLogin() {
   ME = await loadProfile();
   if (!ME) { show('auth'); return; }
+  if (ME.banned) { await sb.auth.signOut(); ME = null; show('auth'); $('#authErr').textContent = 'Ton compte est suspendu. Parle à Hector.'; return; }
   await loadCollection();
   renderHome(); show('home');
   registerSW().then(async () => {
@@ -96,13 +98,16 @@ async function afterLogin() {
   });
   initSocial({ me: () => ME, col: () => COL, toast, busy: () => !!GAME || !!ROOM, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); }, inMatch: () => !!GAME && !GAME.done,
     createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => enterRoom(cleanCode(c), 'guest'), onMeChange: () => renderMe(),
-    reloadCol: async () => { await loadCollection(); renderMe(); } });
+    reloadCol: async () => { await loadCollection(); renderMe(); }, alone: code => !!ROOM && LOB?.code === code && !LOB.peer, leaveIfAlone: code => { if (ROOM && LOB?.code === code && !LOB.peer && !GAME) leaveRoom(); },
+    playing: () => (!!GAME && !GAME.done) || (!!DUEL && !DUEL.done) || (!!ROOM && !!LOB?.peer) });
+  initBank({ me: () => ME, toast, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); },
+    reloadCol: async () => { await loadCollection(); renderMe(); if (!$('#shop').hidden) renderShop(); }, openShop: () => { if (!GAME) { SHOP_TAB = 'packs'; openShop(); } } });
   if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
   else if (!tutoSeen()) openTuto();
   const q = new URLSearchParams(location.search).get('salle');
   if (q) { history.replaceState(null, '', location.pathname); enterRoom(cleanCode(q), 'guest'); }
 }
-$('#bLogout').addEventListener('click', async () => { stopSocial(); await sb.auth.signOut(); ME = null; show('auth'); });
+$('#bLogout').addEventListener('click', async () => { stopSocial(); stopBank(); closeAdmin(); await sb.auth.signOut(); ME = null; show('auth'); });
 
 /* ---------- Accueil ---------- */
 function renderMe() {
@@ -160,6 +165,7 @@ $('#friendAdd').addEventListener('submit', async e => { e.preventDefault(); cons
 $('#profile').addEventListener('click', e => { if (e.target.id === 'profile') closeProfile(); });
 $('#chat').addEventListener('click', e => { if (e.target.id === 'chat') closeChat(); });
 $('#trade').addEventListener('click', e => { if (e.target.id === 'trade') closeTrade(); });
+$('#admin').addEventListener('click', e => { if (e.target.id === 'admin') closeAdmin(); });
 $('#bTrades').addEventListener('click', openTrades);
 
 /* ---------- Paramètres ---------- */
@@ -305,6 +311,7 @@ function renderShop() {
   $('#prog').innerHTML = `<div class="pg-top"><span><b>${n}</b> / ${CARD_LIST.length} cartes</span><span><b>${legs}</b> / 18 légendes</span><span><b>${ult}</b> / 2 ultimes</span><span><b>${COL.packs}</b> packs ouverts</span></div><div class="pg-bar"><i style="width:${Math.round(n / CARD_LIST.length * 100)}%"></i></div>`;
   document.querySelectorAll('#shopTabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === SHOP_TAB));
   const body = $('#shopBody');
+  if (SHOP_TAB === 'coins') { renderCoinShop(body); refreshCoinShop(); return; }
   if (SHOP_TAB === 'packs') {
     body.innerHTML = `<div class="packs">${['free', 'or', 'stars', 'leg', 'icon'].map(k => {
       const P = PACKS[k], odds = ODD_ORDER.filter(t => P.odds[t] > 0).map(t => `<span class="od od-${t}">${TIER_NAME[t]} ${String(P.odds[t]).replace('.', ',')} %</span>`).join('');
@@ -366,7 +373,9 @@ async function enterRoom(code, role) {
   $('#roomCode').textContent = code;
   renderLobby(); show('lobby');
   try { await room.join(); renderNet(room.linkInfo()); }
-  catch { toast('Connexion à la salle impossible. Vérifie ta connexion.'); leaveRoom(); }
+  catch { if (ROOM === room) { toast('Connexion à la salle impossible. Vérifie ta connexion.'); leaveRoom(); } return; }
+  // invité arrivé dans une salle vide : le créateur est sûrement parti
+  if (role === 'guest') setTimeout(() => { if (ROOM === room && !LOB?.peer && !GAME) toast('Personne dans cette salle… ton ami est peut-être parti. Tu peux quitter et le défier à ton tour.'); }, 15000);
 }
 async function leaveRoom() {
   const r = ROOM; ROOM = null; LOB = null;
@@ -374,6 +383,16 @@ async function leaveRoom() {
   ME = await loadProfile() || ME; await loadCollection(); renderHome(); show('home');
 }
 $('#bLeave').addEventListener('click', leaveRoom);
+// notification touchée alors que le jeu est déjà ouvert
+navigator.serviceWorker?.addEventListener('message', e => {
+  if (e.data?.type !== 'open' || !ME) return;
+  let u; try { u = new URL(e.data.url); } catch { return; }
+  const salle = cleanCode(u.searchParams.get('salle'));
+  if (salle.length === 4) {
+    if ((GAME && !GAME.done) || (DUEL && !DUEL.done)) { toast('Termine ton match d\'abord.'); return; }
+    if (LOB?.code !== salle) enterRoom(salle, 'guest');
+  } else if (u.searchParams.get('admin') && ME.is_admin) openAdmin();
+});
 $('#roomCode').addEventListener('click', async () => {
   const url = `${location.origin}${location.pathname}?salle=${LOB.code}`;
   try { await navigator.clipboard.writeText(url); toast('Lien d\'invitation copié'); }
@@ -634,6 +653,7 @@ function closeTop() {
   if (!$('#chat').hidden) { closeChat(); return true; }
   if (!$('#profile').hidden) { closeProfile(); return true; }
   if (!$('#settings').hidden) { closeSettings(); return true; }
+  if (!$('#admin').hidden) { closeAdmin(); return true; }
   if (!$('#menu').hidden) { $('#menu').hidden = true; return true; }
   for (const id of ['tuto', 'pack', 'picker']) {
     const o = $('#' + id); if (o.hidden) continue;

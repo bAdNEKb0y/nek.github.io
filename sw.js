@@ -13,7 +13,13 @@ self.addEventListener('notificationclick', e => {
   const url = new URL(e.notification.data?.url || './', self.registration.scope).href;
   e.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const c of all) { if ('focus' in c) { await c.focus(); if (url.includes('salle=') && 'navigate' in c) await c.navigate(url); return; } }
+    for (const c of all) {
+      if (!('focus' in c)) continue;
+      // l'appli est déjà ouverte : on lui dit quoi faire sans la recharger
+      c.postMessage({ type: 'open', url });
+      await c.focus().catch(() => { });
+      return;
+    }
     await self.clients.openWindow(url);
   })());
 });

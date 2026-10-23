@@ -37,7 +37,12 @@ export function initSocial(h) {
     renderFriends();
   });
   CH.on('broadcast', { event: 'invite' }, ({ payload: p }) => { if (p?.to === ME.id) showInvite(p); });
-  CH.on('broadcast', { event: 'invite-no' }, ({ payload: p }) => { if (p?.to === ME.id) H.toast(`${p.name} ne peut pas jouer maintenant.`); });
+  CH.on('broadcast', { event: 'invite-no' }, ({ payload: p }) => {
+    if (p?.to !== ME.id) return;
+    H.toast(p.busy ? `${p.name} est déjà en match. Réessaie dans un moment.` : `${p.name} ne peut pas jouer maintenant.`);
+    if (p.code) H.leaveIfAlone?.(p.code);
+  });
+  CH.on('broadcast', { event: 'invite-ok' }, ({ payload: p }) => { if (p?.to === ME.id) H.toast(`${p.name} a accepté : il arrive ! ⚽`); });
   CH.on('broadcast', { event: 'msg' }, ({ payload: p }) => { if (p?.to === ME.id) gotMsg(p); });
   CH.on('broadcast', { event: 'trade' }, async ({ payload: p }) => {
     if (p?.to !== ME.id) return;
@@ -108,23 +113,26 @@ async function respond(id, ok) {
 /* ---------- Défis ---------- */
 function challenge(f) {
   if (!f || !CH) return;
+  if (H.playing?.()) { H.toast('Termine ton match avant de défier un ami.'); return; }
   const code = H.createRoom(), on = isOnline(f.id);
-  CH.send({ type: 'broadcast', event: 'invite', payload: { to: f.id, from: ME.id, name: ME.display, code } });
+  CH.send({ type: 'broadcast', event: 'invite', payload: { to: f.id, from: ME.id, name: ME.display, code, at: Date.now() } });
   if (!on) sendPush({ kind: 'invite', to: f.id, code });
   H.toast(on ? `Défi envoyé à ${f.display}. Il arrive dans ta salle…` : `${f.display} n'est pas en ligne : il reçoit une notification. Attends-le dans la salle.`);
+  setTimeout(() => { if (H.alone?.(code)) H.toast(`${f.display} n'a pas encore répondu. Tu peux l'attendre ou quitter la salle.`); }, 45000);
   closeProfile();
 }
 let invT = null;
 function showInvite(p) {
-  if (H.busy()) { CH?.send({ type: 'broadcast', event: 'invite-no', payload: { to: p.from, name: ME.display } }); return; }
+  if (!p?.code || (p.at && Math.abs(Date.now() - p.at) > 90000)) return; // défi trop vieux
+  if (H.playing ? H.playing() : H.busy()) { CH?.send({ type: 'broadcast', event: 'invite-no', payload: { to: p.from, name: ME.display, code: p.code, busy: true } }); return; }
   document.querySelector('.invite')?.remove(); clearTimeout(invT);
   const d = document.createElement('div'); d.className = 'invite'; d.setAttribute('role', 'alertdialog');
   d.innerHTML = `<span class="ib">⚽</span><div><b>${esc(p.name)} te défie !</b><small>Match en ligne · salle ${esc(p.code)}</small></div>
     <button class="btn small primary" data-i="go">Jouer</button><button class="btn small" data-i="no">Non</button>`;
   $('#app').appendChild(d); H.sound?.();
   const close = () => { clearTimeout(invT); d.remove(); };
-  d.querySelector('[data-i=go]').onclick = () => { close(); H.joinRoom(p.code); };
-  d.querySelector('[data-i=no]').onclick = () => { close(); CH?.send({ type: 'broadcast', event: 'invite-no', payload: { to: p.from, name: ME.display } }); };
+  d.querySelector('[data-i=go]').onclick = () => { close(); closeProfile(); closeChat(); closeTrade(); CH?.send({ type: 'broadcast', event: 'invite-ok', payload: { to: p.from, name: ME.display } }); H.joinRoom(p.code); };
+  d.querySelector('[data-i=no]').onclick = () => { close(); CH?.send({ type: 'broadcast', event: 'invite-no', payload: { to: p.from, name: ME.display, code: p.code } }); };
   invT = setTimeout(close, 30000);
 }
 
