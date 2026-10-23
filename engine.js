@@ -109,6 +109,7 @@ function giveBall(G, p) {
 }
 function kick(G, p, vx, vy, power, vz = 0) {
   const b = G.ball; b.owner = null; b.vx = vx; b.vy = vy; b.vz = vz; b.z = vz ? .2 : 0; b.lift = vz > 4 ? .16 : 0; b.cross = false; p.kcd = .32; b.last = p; p.holdT = 0;
+  b.kx = p.x; b.ky = p.y; b.spec = ''; b.maxz = 0; // pour reconnaître les beaux buts
   ev(G, 'kick', { pw: power });
 }
 const GRAV = 30;
@@ -167,7 +168,7 @@ function volley(G, p) {
   p.kcd = .4; p.st.tir++; G.stats.shots[p.t]++;
   kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, 1.4, rnd(0, 2));
   const vy = Math.sin(a) * sp; if (vy) { const tt = (gy - b.y) / vy; if (tt > 0 && Math.abs(b.x + Math.cos(a) * sp * tt - CX) < GH) G.stats.onT[p.t]++; }
-  ev(G, 'volley', {}); banner(G, 'REPRISE DE VOLÉE !', p.name, 1, p.t); G.passTarget = null;
+  b.spec = 'volley'; ev(G, 'volley', {}); banner(G, 'REPRISE DE VOLÉE !', p.name, 1, p.t); G.passTarget = null;
 }
 /** Tête : vers le but si on attaque, dégagement sinon */
 function header(G, p) {
@@ -184,7 +185,7 @@ function header(G, p) {
     p.st.tir++; G.stats.shots[p.t]++;
     kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, 1.5, rnd(0, 2.5));
     const vy = Math.sin(a) * sp; if (vy) { const tt = (gy - b.y) / vy; if (tt > 0 && Math.abs(b.x + Math.cos(a) * sp * tt - CX) < GH) G.stats.onT[p.t]++; }
-    p.flip = .7; ev(G, 'bicycle', {}); banner(G, 'RETOURNÉE !', p.name, 1.1, p.t); G.passTarget = null;
+    p.flip = .7; b.spec = 'bicycle'; ev(G, 'bicycle', {}); banner(G, 'RETOURNÉE !', p.name, 1.1, p.t); G.passTarget = null;
     return;
   }
   if (attacking) {
@@ -195,7 +196,7 @@ function header(G, p) {
     p.st.tir++; G.stats.shots[p.t]++;
     kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, 1.1, rnd(-1, 3));
     const vy = Math.sin(a) * sp; if (vy) { const tt = (gy - b.y) / vy; if (tt > 0 && Math.abs(b.x + Math.cos(a) * sp * tt - CX) < GH) G.stats.onT[p.t]++; }
-    ev(G, 'header', {}); G.passTarget = null;
+    b.spec = 'header'; ev(G, 'header', {}); G.passTarget = null;
   } else {
     const a = Math.atan2(d, (b.x - CX) / 40) + gauss() * .5;
     kick(G, p, Math.cos(a) * 26, Math.sin(a) * 26, 1, 9);
@@ -448,6 +449,7 @@ function aiPlayer(G, p, dt) {
 
 /* ---------- Ballon ---------- */
 function ballUpdate(G, dt) {
+  if (G.ball.z > (G.ball.maxz || 0)) G.ball.maxz = G.ball.z;
   const b = G.ball;
   if (b.owner) {
     const o = b.owner, off = PR + BR + .15;
@@ -515,8 +517,12 @@ function goalScored(G, t) {
   const own = b.last && b.last.t !== t, sc = b.last;
   if (sc && !own) sc.st.but++;
   G.scorers.push({ t, name: sc ? sc.name : '', num: sc ? sc.num : 0, min: clockMin(G), own });
-  G.state = 'goal'; G.stateT = 2.8; G.nextKick = 1 - t; G.passTarget = null;
+  // Beau but : reprise, retournée, tête, frappe de loin ou lob -> pause plus longue pour le ralenti 3D
+  const dist = b.ky == null ? 0 : (t === 0 ? b.ky : FL - b.ky);
+  const beau = !own && !!sc && (['volley', 'bicycle', 'header'].includes(b.spec) || dist >= 24 || (b.maxz || 0) > 2.8);
+  G.state = 'goal'; G.stateT = beau ? 6.2 : 2.8; G.nextKick = 1 - t; G.passTarget = null;
   ev(G, 'goal', { t });
+  if (beau) ev(G, 'beau', { n: b.spec === 'bicycle' ? 3 : b.spec === 'volley' ? 2 : 1 });
   banner(G, 'BUT !', own ? `Contre son camp · ${sc ? sc.name : ''}` : `${sc ? sc.name : G.team[t].name} · ${clockMin(G)}'`, 2.6, t);
 }
 function goalKick(G, t) {

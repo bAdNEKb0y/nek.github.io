@@ -2,6 +2,7 @@ import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, custo
 import { predictOwn } from './predict.js';
 import { openTuto, tutoSeen } from './tuto.js';
 import { PAD, initPad, pollPad, rumble, padLabels } from './gamepad.js';
+import { preload3D, ready3D, play3D } from './replay3d.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
@@ -501,7 +502,7 @@ function xy(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.lef
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); audio();
   if (!document.fullscreenElement && matchMedia('(pointer:coarse)').matches) goFull();
-  if (GAME?.replay && performance.now() >= GAME.replay.start) { GAME.replay = null; return; }
+  if (GAME?.replay && performance.now() >= GAME.replay.start) { stopReplay(GAME); return; }
   const [x, y] = xy(e), k = hit(x, y);
   if (!k) return;
   if (k === 'M') { openMenu(); return; }
@@ -550,7 +551,7 @@ function closeTop() {
 }
 initPad({
   inGame: () => !!GAME && !GAME.done && !$('#game').hidden && $('#menu').hidden,
-  aDown: () => { audio(); if (GAME?.replay && performance.now() >= GAME.replay.start) { GAME.replay = null; return; } aPress(); }, aUp: () => aRelease(),
+  aDown: () => { audio(); if (GAME?.replay && performance.now() >= GAME.replay.start) { stopReplay(GAME); return; } aPress(); }, aUp: () => aRelease(),
   bDown: () => { audio(); bPress(); }, bUp: () => bRelease(),
   lob: () => { audio(); if (myBall()) { LI.l++; LI.aFlash = .15; buzz([10, 30, 18]); } else { LI.a++; LI.aFlash = .15; } },
   swap: () => { if (!myBall()) { LI.a++; LI.aFlash = .15; } },
@@ -610,7 +611,7 @@ function beginGame({ cfg, side, online, names, uids }) {
   g.onSnap = d => { const now = performance.now(); g.lastSnapAt = now; if (g.snaps.length && d.q <= g.snaps[g.snaps.length - 1].q) return; g.snaps.push({ at: now, q: d.q, s: d.s }); if (g.snaps.length > 30) g.snaps.shift(); };
   g.onEnd = d => { if (!g.done) finishGame(d); };
   g.forfeit = (iWin, msg) => { if (g.done) return; const sc = iWin ? [3, 0] : [0, 3]; finishGame({ forfeit: true, msg, score: side === 0 ? sc : [sc[1], sc[0]] }); };
-  GAME = g; R.me = side;
+  GAME = g; R.me = side; preload3D();
   show('game'); $('#menu').hidden = true;
   R.resize(); requestAnimationFrame(() => R.resize());
   keepAwake();
@@ -636,11 +637,23 @@ function interp(snaps, now) {
 const RP_DELAY = 900, RP_SPEED = .62;
 function startReplay(g, now) {
   const fr = (g.hist || []).filter(h => now - h.at <= 2300);
-  if (fr.length < 20) return;
-  g.replay = { frames: fr.slice(), t0: fr[0].at, start: now + RP_DELAY, dur: (fr[fr.length - 1].at - fr[0].at) / RP_SPEED };
+  if (fr.length < 8) return;
+  g.replay = { frames: fr.slice(), t0: fr[0].at, goalAt: now, start: now + RP_DELAY, dur: (fr[fr.length - 1].at - fr[0].at) / RP_SPEED };
 }
+/** Beau but : ralenti en 3D (si Three.js est prêt), sinon ralenti 2D classique */
+function tick3D(g, now) {
+  const r = g.replay; if (!r || !r.beau || r.r3d || now < r.start) return;
+  const fr = g.hist.filter(h => h.at >= r.goalAt - 2800 && h.at <= r.goalAt + 650);
+  const sc = g.G ? g.G.scorers[g.G.scorers.length - 1] : null;
+  const scorer = sc ? `${sc.name} · ${sc.min}'` : (g.V?.bn && g.V.bn[1] === 'BUT !' ? g.V.bn[2] : '');
+  const title = r.beau === 3 ? 'RETOURNÉE DE FOLIE !' : r.beau === 2 ? 'QUELLE VOLÉE !' : 'BUT MAGNIFIQUE !';
+  r.r3d = play3D({ host: $('#game'), frames: fr, M: g.M, scorer, title, onEnd: () => { if (g.replay === r) g.replay = null; } });
+  if (!r.r3d) r.beau = 0; // échec WebGL : ralenti 2D
+}
+function stopReplay(g) { if (!g?.replay) return; const r = g.replay; g.replay = null; r.r3d?.stop(); }
 function replayFrame(g, now) {
   const r = g.replay; if (!r) return null;
+  if (r.beau) { if (g.V && g.V.st === 'play') stopReplay(g); return null; }
   if (now < r.start) return null;
   const k = now - r.start;
   if (k > r.dur || (g.V && g.V.st === 'play')) { g.replay = null; return null; }
@@ -688,7 +701,7 @@ function frame(now) {
       if (g.V?.end && !g.endTimer) g.endTimer = setTimeout(() => { if (!g.done) finishGame({ score: g.V.sc, partial: true }); }, 3000);
     }
     // Historique des 3 dernières secondes (pour le ralenti des buts)
-    if (g.V) { (g.hist ||= []).push({ at: now, V: g.V }); while (g.hist.length && now - g.hist[0].at > 3000) g.hist.shift(); }
+    if (g.V) { (g.hist ||= []).push({ at: now, V: g.V }); while (g.hist.length && now - g.hist[0].at > 4200) g.hist.shift(); }
     // Charge du tir affichée localement
     if (g.V) {
       const hasBall = g.V.b[3] >= 0 && g.V.b[3] === g.V.c[g.side];
@@ -698,6 +711,7 @@ function frame(now) {
         if (s <= g.lastEv) continue;
         g.lastEv = s; playEvent(type, val);
         if (type === 'goal') { g.parts.push(...R.goalBurst(val, g.M)); startReplay(g, now); }
+        if (type === 'beau' && g.replay && ready3D()) g.replay.beau = val || 1;
         if (type === 'bicycle' || type === 'volley') g.parts.push(...R.burstAt(g.V, g.M));
         if (type === 'kick' && val >= 1.1) g.parts.push(...R.grassAt(g.V));
       }
@@ -709,6 +723,7 @@ function frame(now) {
     if (g.online && g.side === 0 && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
     if (g.online && g.side === 1 && !ROOM?.peer && g.V) overlay = `${g.names[0]} s'est déconnecté…`;
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
+    tick3D(g, now);
     const rp = replayFrame(g, now);
     R.draw(rp || g.V, g.M, { me: g.side, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
   }
@@ -724,7 +739,7 @@ $('#bQuit').addEventListener('click', () => {
   $('#menu').hidden = true;
   if (!GAME) return;
   if (GAME.online) { ROOM?.send('quit', {}); GAME.forfeit(false, 'Tu as abandonné le match.'); }
-  else { GAME = null; renderHome(); show('home'); }
+  else { stopReplay(GAME); GAME = null; renderHome(); show('home'); }
 });
 
 /* ---------- Fin du match ---------- */
@@ -736,7 +751,7 @@ function noteOf(p, score) {
 }
 async function finishGame(sum) {
   const g = GAME; if (!g || g.done) return;
-  g.done = true; clearTimeout(g.endTimer);
+  g.done = true; clearTimeout(g.endTimer); stopReplay(g);
   try { wake?.release(); } catch { }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
   const me = g.side, op = 1 - me, M = g.M, sc = sum.score || [0, 0];
