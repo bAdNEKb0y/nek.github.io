@@ -59,6 +59,8 @@ export const S = {
   volley() { if (!ok()) return; this.kick(1.4); crowdOoh(.9); },
   bicycle() { if (!ok()) return; this.kick(1.5); crowdOoh(1); },
   goal() { if (!ok()) return; roar(3.2, .55); const t = now() + .15; for (const f of [233, 294, 349]) { const o = osc('sawtooth', f, t, .9, .06); } },
+  dribble() { if (!ok()) return; const t = now(); noise(t, .32, .22, 'bandpass', 500, 2.2, 2600, .03); osc('triangle', 340, t + .05, .18, .05, 760); crowdOoh(.6); },
+  wow() { if (!ok()) return; crowdOoh(1.2); },
   click() { if (!ok()) return; const t = now(); osc('triangle', 1400, t, .04, .05, 900); },
   coin() { if (!ok()) return; const t = now(); osc('square', 988, t, .08, .06); osc('square', 1319, t + .08, .25, .06); },
 };
