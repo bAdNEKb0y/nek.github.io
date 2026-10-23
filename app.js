@@ -7,6 +7,7 @@ import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundO
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
+import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, kitOf } from './social.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -85,12 +86,14 @@ async function afterLogin() {
   if (!ME) { show('auth'); return; }
   await loadCollection();
   renderHome(); show('home');
+  initSocial({ me: () => ME, col: () => COL, toast, busy: () => !!GAME || !!ROOM, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); }, inMatch: () => !!GAME && !GAME.done,
+    createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => enterRoom(cleanCode(c), 'guest'), onMeChange: () => renderMe() });
   if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
   else if (!tutoSeen()) openTuto();
   const q = new URLSearchParams(location.search).get('salle');
   if (q) { history.replaceState(null, '', location.pathname); enterRoom(cleanCode(q), 'guest'); }
 }
-$('#bLogout').addEventListener('click', async () => { await sb.auth.signOut(); ME = null; show('auth'); });
+$('#bLogout').addEventListener('click', async () => { stopSocial(); await sb.auth.signOut(); ME = null; show('auth'); });
 
 /* ---------- Accueil ---------- */
 function renderMe() {
@@ -100,18 +103,20 @@ function renderMe() {
     $('#clubTxt').textContent = `${t.name} · note ${t.ovr}`;
     $('#shopTxt').textContent = `${n} / ${CARD_LIST.length} cartes · ${freeReady() ? 'pack gratuit dispo !' : 'pack gratuit dans ' + freeLeft()}`;
   }
-  const k = ME.fav_team === 'PERSO' && COL ? customTeam(COL.team).h : TEAMS[teamIdx(ME.fav_team)].h;
-  $('#meCard').innerHTML = `<div class="av">${shirtSVG(k)}</div><div><b>${esc(ME.display)}</b><small>${ME.wins} V · ${ME.draws} N · ${ME.losses} D</small></div><div class="elo" title="Classement Elo">${ME.rating}</div>`;
+  const k = ME.avatar ? kitOf(ME) : ME.fav_team === 'PERSO' && COL ? customTeam(COL.team).h : TEAMS[teamIdx(ME.fav_team)].h;
+  $('#meCard').innerHTML = `<div class="av">${shirtSVG(k)}</div><div><b>${esc(ME.display)}</b><small>${ME.title ? esc(ME.title) : `${ME.wins} V · ${ME.draws} N · ${ME.losses} D`}</small></div><div class="elo" title="Classement Elo">${ME.rating}</div>`;
 }
 async function renderHome() {
   renderMe();
   $('#homeErr').textContent = '';
   const [{ data: top }, { data: mine }] = await Promise.all([
-    sb.from('profiles').select('id,display,rating,wins,draws,losses').order('rating', { ascending: false }).limit(15),
+    sb.from('profiles').select('id,display,rating,wins,draws,losses,avatar,fav_team,title').order('rating', { ascending: false }).limit(20),
     sb.from('matches').select('home,away,home_team,away_team,home_score,away_score,created_at,hp:profiles!matches_home_fkey(display),ap:profiles!matches_away_fkey(display)')
       .or(`home.eq.${ME.id},away.eq.${ME.id}`).order('created_at', { ascending: false }).limit(8),
   ]);
-  $('#board').innerHTML = (top || []).map(p => `<li class="${p.id === ME.id ? 'mine' : ''}"><span class="nm">${esc(p.display)}</span><span class="rec">${p.wins}V ${p.draws}N ${p.losses}D</span><span class="pts">${p.rating}</span></li>`).join('') || '<li class="muted">Personne pour l\'instant. Joue le premier match !</li>';
+  $('#board').innerHTML = (top || []).map(p => `<li class="${p.id === ME.id ? 'mine' : ''}" data-prof="${p.id}" tabindex="0" role="button" aria-label="Voir le profil de ${esc(p.display)}"><span class="bav">${shirtSVG(kitOf(p))}</span><span class="nm">${esc(p.display)}${p.title ? `<small>${esc(p.title)}</small>` : ''}</span><span class="rec">${p.wins}V ${p.draws}N ${p.losses}D</span><span class="pts">${p.rating}</span></li>`).join('') || '<li class="muted">Personne pour l\'instant. Joue le premier match !</li>';
+  $('#board').querySelectorAll('[data-prof]').forEach(li => { li.onclick = () => openProfile(li.dataset.prof); li.onkeydown = e => { if (e.key === 'Enter') openProfile(li.dataset.prof); }; });
+  renderFriends();
   $('#recent').innerHTML = (mine || []).map(m => {
     const home = m.home === ME.id, my = home ? m.home_score : m.away_score, op = home ? m.away_score : m.home_score;
     const r = my > op ? 'w' : my < op ? 'l' : 'd', opName = (home ? m.ap : m.hp)?.display || 'Joueur supprimé';
@@ -141,6 +146,10 @@ $('#joinForm').addEventListener('submit', e => {
 });
 $('#bSolo').addEventListener('click', () => { audio(); if (!tutoSeen()) openTuto(startSolo); else startSolo(); });
 $('#bTuto').addEventListener('click', () => openTuto());
+$('#meCard').addEventListener('click', () => ME && openProfile(ME.id));
+$('#friendAdd').addEventListener('submit', async e => { e.preventDefault(); const i = $('#friendName'), v = i.value.trim(); if (v.length < 3) { toast('Écris le pseudo de ton ami (3 lettres minimum).'); return; } if (await addFriend(v)) i.value = ''; });
+$('#profile').addEventListener('click', e => { if (e.target.id === 'profile') closeProfile(); });
+$('#chat').addEventListener('click', e => { if (e.target.id === 'chat') closeChat(); });
 
 /* ---------- Paramètres ---------- */
 onSetting(k => { if (['saver', 'cam', 'btn', 'lefty'].includes(k) && GAME) R.resize(); });
@@ -587,6 +596,8 @@ addEventListener('keyup', e => {
 function bPress() { if (LI.bDown) return; LI.bDown = true; LI.b++; }
 function bRelease() { if (!LI.bDown) return; localKick(1.3); LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
 function closeTop() {
+  if (!$('#chat').hidden) { closeChat(); return true; }
+  if (!$('#profile').hidden) { closeProfile(); return true; }
   if (!$('#settings').hidden) { closeSettings(); return true; }
   if (!$('#menu').hidden) { $('#menu').hidden = true; return true; }
   for (const id of ['tuto', 'pack', 'picker']) {
