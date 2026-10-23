@@ -1,0 +1,14 @@
+{
+  "name": "Foot de Poche Admin",
+  "short_name": "FdP Admin",
+  "id": "./admin.html",
+  "start_url": "./admin.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1411",
+  "theme_color": "#0b1411",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

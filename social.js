@@ -121,13 +121,21 @@ function challenge(f) {
   setTimeout(() => { if (H.alone?.(code)) H.toast(`${f.display} n'a pas encore répondu. Tu peux l'attendre ou quitter la salle.`); }, 45000);
   closeProfile();
 }
+/** Invite un ami dans une salle déjà ouverte (salle à plusieurs) */
+export function inviteToRoom(f, code) {
+  if (!f || !CH) return;
+  const on = isOnline(f.id);
+  CH.send({ type: 'broadcast', event: 'invite', payload: { to: f.id, from: ME.id, name: ME.display, code, at: Date.now() } });
+  if (!on) sendPush({ kind: 'invite', to: f.id, code });
+  H.toast(on ? `Invitation envoyée à ${f.display}` : `${f.display} n'est pas en ligne : il reçoit une notification.`);
+}
 let invT = null;
 function showInvite(p) {
   if (!p?.code || (p.at && Math.abs(Date.now() - p.at) > 90000)) return; // défi trop vieux
   if (H.playing ? H.playing() : H.busy()) { CH?.send({ type: 'broadcast', event: 'invite-no', payload: { to: p.from, name: ME.display, code: p.code, busy: true } }); return; }
   document.querySelector('.invite')?.remove(); clearTimeout(invT);
   const d = document.createElement('div'); d.className = 'invite'; d.setAttribute('role', 'alertdialog');
-  d.innerHTML = `<span class="ib">⚽</span><div><b>${esc(p.name)} te défie !</b><small>Match en ligne · salle ${esc(p.code)}</small></div>
+  d.innerHTML = `<span class="ib">${p.code.length === 5 ? '👥' : '⚽'}</span><div><b>${esc(p.name)} ${p.code.length === 5 ? 't\'invite à jouer !' : 'te défie !'}</b><small>${p.code.length === 5 ? 'Match à plusieurs' : 'Match en ligne'} · salle ${esc(p.code)}</small></div>
     <button class="btn small primary" data-i="go">Jouer</button><button class="btn small" data-i="no">Non</button>`;
   $('#app').appendChild(d); H.sound?.();
   const close = () => { clearTimeout(invT); d.remove(); };

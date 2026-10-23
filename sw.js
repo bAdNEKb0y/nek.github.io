@@ -13,8 +13,10 @@ self.addEventListener('notificationclick', e => {
   const url = new URL(e.notification.data?.url || './', self.registration.scope).href;
   e.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const admin = url.includes('admin.html');
     for (const c of all) {
       if (!('focus' in c)) continue;
+      if (admin !== c.url.includes('admin.html')) continue; // le panel admin et le jeu sont deux applis séparées
       // l'appli est déjà ouverte : on lui dit quoi faire sans la recharger
       c.postMessage({ type: 'open', url });
       await c.focus().catch(() => { });

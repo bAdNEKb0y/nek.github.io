@@ -6,7 +6,7 @@
 export function predictOwn(g, mine, dt, now, rtt) {
   const L = g.snaps[g.snaps.length - 1], V = g.V;
   if (!L || !V || L.s.st !== 'play' || V.st !== 'play') { g.pred = null; return; }
-  const ci = L.s.c[1];
+  const ci = L.s.c[g.slot ?? 1] ?? -1;
   if (ci < 0 || L.s.p[ci][4]) { g.pred = null; return; }
   const src = L.s.p[ci];
   let P = g.pred;
@@ -15,7 +15,7 @@ export function predictOwn(g, mine, dt, now, rtt) {
     P = g.pred = { i: ci, x: iv[0], y: iv[1], vx: 0, vy: 0 };
   }
   // Même physique que le moteur (vitesse max, accélération)
-  const tm = g.M.team[1], pl = g.M.players[ci];
+  const tm = g.M.team[g.side ?? 1], pl = g.M.players[ci];
   const own = L.s.b[3] === ci;
   let sp = 13 + ((tm.vit ?? 80) - 60) * .22 + ((pl?.r ?? 80) - (tm.ovr ?? pl?.r ?? 80)) * .12;
   if (own) sp *= .9;

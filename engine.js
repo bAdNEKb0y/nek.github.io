@@ -38,19 +38,23 @@ export function pickKits(A, B) {
 export const blankInput = () => ({ jx: 0, jy: 0, mag: 0, a: false, lob: false, b: false, bDown: false, rel: false, relCharge: 0 });
 
 /**
- * cfg: { teams: [équipe0, équipe1] (ou t0, t1 = index dans TEAMS), dur (s), humans: [bool,bool], diff (0..2) }
+ * cfg: { teams: [équipe0, équipe1] (ou t0, t1 = index dans TEAMS), dur (s), humans: [bool,bool], diff (0..2),
+ *        slots: [équipe de l'humain 0, équipe de l'humain 1, …] (facultatif : plusieurs joueurs dans la même équipe) }
+ * Chaque humain (« slot ») contrôle un joueur ; inputs[s] = entrées de l'humain s.
  */
 export function createMatch(cfg) {
   const team = cfg.teams || [TEAMS[cfg.t0], TEAMS[cfg.t1]];
+  const slots = cfg.slots || (cfg.humans?.[1] ? [0, 1] : cfg.humans?.[0] === false ? [] : [0]);
+  const hum = [slots.includes(0), slots.includes(1)];
   const G = {
-    cfg, team, kit: pickKits(team[0], team[1]),
-    ai: [cfg.humans[0] ? MATE_AI : DIFF[cfg.diff ?? 1], cfg.humans[1] ? MATE_AI : DIFF[cfg.diff ?? 1]],
+    cfg, team, kit: pickKits(team[0], team[1]), slots, hum,
+    ai: [hum[0] ? MATE_AI : DIFF[cfg.diff ?? 1], hum[1] ? MATE_AI : DIFF[cfg.diff ?? 1]],
     players: [], byTeam: [[], []],
     ball: { x: CX, y: 50, z: 0, vx: 0, vy: 0, vz: 0, owner: null, last: null, protect: 0, spin: 0, cross: false },
     score: [0, 0], time: 0, dur: cfg.dur, half: 1, state: 'kickoff', stateT: 0, nextKick: 0,
-    ctrl: [null, null], chaser: [null, null], cover: [null, null], preview: [null, null], charge: [0, 0],
+    ctrl: slots.map(() => null), chaser: [null, null], cover: [null, null], preview: slots.map(() => null), charge: slots.map(() => 0), off: slots.map(() => false),
     stats: { shots: [0, 0], onT: [0, 0], poss: [0, 0] }, scorers: [],
-    passTarget: null, passT: 0, events: [], evSeq: 0, banner: null, ended: false, land: null, hold: [false, false],
+    passTarget: null, passT: 0, events: [], evSeq: 0, banner: null, ended: false, land: null, hold: slots.map(() => false),
   };
   for (let t = 0; t < 2; t++) for (let i = 0; i < 5; i++) {
     const sq = team[t].sq[i];
@@ -73,14 +77,32 @@ function setupKickoff(G, kt, first) {
   const k = G.byTeam[kt][3]; k.x = CX; k.y = 50 - dirOf(kt) * (PR + BR + .25);
   const b = G.ball; b.x = CX; b.y = 50; b.vx = b.vy = 0; b.z = b.vz = 0; b.owner = null;
   giveBall(G, k);
-  for (let t = 0; t < 2; t++) if (G.cfg.humans[t]) G.ctrl[t] = t === kt ? k : nearestToBall(G, t, null);
-  G.passTarget = null; G.charge = [0, 0];
+  G.ctrl = G.slots.map(() => null);
+  for (let s = 0; s < G.slots.length; s++) {
+    if (G.off[s]) continue;
+    const t = G.slots[s];
+    G.ctrl[s] = t === kt && !G.ctrl.includes(k) ? k : nearestFree(G, t, CX, 50);
+  }
+  G.passTarget = null; G.charge = G.slots.map(() => 0);
   G.state = 'kickoff'; G.stateT = first ? 2.2 : 1.3;
   if (first) banner(G, "COUP D'ENVOI", G.half === 2 ? 'Deuxième mi-temps' : `${G.team[0].short} contre ${G.team[1].short}`, 2);
 }
 
 const T = (G, p) => G.team[p.t];
-const isCtrl = (G, p) => !!G.cfg.humans[p.t] && G.ctrl[p.t] === p;
+const isCtrl = (G, p) => !!p && G.ctrl.includes(p);
+const slotOf = (G, p) => p ? G.ctrl.indexOf(p) : -1;
+/** Joueur de champ le plus proche de (x, y) qui n'est pas déjà contrôlé par un humain */
+function nearestFree(G, t, x, y, except) {
+  let best = null, bd = 1e9;
+  for (const p of G.byTeam[t]) { if (p.gk || p === except || G.ctrl.includes(p)) continue; const d = hyp(p.x - x, p.y - y); if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+/** Humain de l'équipe t dont le joueur est le plus proche de p (celui qui « prend » le ballon) */
+function nearestSlot(G, t, p) {
+  let best = -1, bd = 1e9;
+  for (let s = 0; s < G.slots.length; s++) { if (G.slots[s] !== t || G.off[s]) continue; const c = G.ctrl[s]; const d = c ? hyp(c.x - p.x, c.y - p.y) : 1e8; if (d < bd) { bd = d; best = s; } }
+  return best;
+}
 const pb = (G, p) => p.r - T(G, p).ovr;
 
 function nearestToBall(G, t, except) {
@@ -103,8 +125,14 @@ function moveTo(G, p, tx, ty, u, dt) {
 }
 function giveBall(G, p) {
   const b = G.ball;
+  const prev = b.last;
   b.owner = p; b.vx = b.vy = 0; b.z = b.vz = 0; b.cross = false; b.last = p; b.protect = .7; G.passTarget = null; G.passPt = null;
-  if (G.cfg.humans[p.t] && !p.gk) G.ctrl[p.t] = p;
+  if (G.hum[p.t] && !p.gk && !isCtrl(G, p)) {
+    // le ballon arrive chez un joueur libre : l'humain qui a fait la passe le suit, sinon le plus proche
+    let s = prev && prev.t === p.t ? slotOf(G, prev) : -1;
+    if (s < 0) s = nearestSlot(G, p.t, p);
+    if (s >= 0) G.ctrl[s] = p;
+  }
   if (p.gk) p.holdT = 1.0;
 }
 function kick(G, p, vx, vy, power, vz = 0) {
@@ -151,14 +179,15 @@ function passTo(G, p, m, opt = {}) {
     kick(G, p, Math.cos(a) * sp, Math.sin(a) * sp, .7);
     G.passTarget = m; G.passPt = [tx, ty]; G.passT = dd / sp + .9;
   }
-  if (G.cfg.humans[p.t] && !m.gk) G.ctrl[p.t] = m;
+  const ps = slotOf(G, p);
+  if (ps >= 0 && !m.gk && !isCtrl(G, m)) G.ctrl[ps] = m;
 }
 /** Reprise de volée directe (joueurs notés 90 et plus) : le receveur frappe sans contrôle */
 function canVolley(G, p) {
   const b = G.ball;
   if (p.r < 90 || p.gk || b.z < .25 || b.z > 2.2) return false;
   if (toGoalOf(p.t, p.y) > 30 || Math.abs(p.x - CX) > 22) return false;
-  return isCtrl(G, p) ? G.hold[p.t] : Math.random() < .45;
+  return isCtrl(G, p) ? G.hold[slotOf(G, p)] : Math.random() < .45;
 }
 function volley(G, p) {
   const b = G.ball, gy = atkY(p.t), tm = T(G, p), gk = G.byTeam[1 - p.t][0];
@@ -177,7 +206,7 @@ function header(G, p) {
   p.kcd = .4;
   // Retournée acrobatique : réservée aux joueurs notés 92 et plus
   const human = isCtrl(G, p);
-  if (attacking && p.r >= 92 && b.z > 1.1 && (human ? G.hold[p.t] : Math.random() < .4)) {
+  if (attacking && p.r >= 92 && b.z > 1.1 && (human ? G.hold[slotOf(G, p)] : Math.random() < .4)) {
     const tm = T(G, p), gk = G.byTeam[1 - p.t][0];
     const aimX = CX + (gk.x > CX ? -1 : 1) * rnd(3, GH - 1);
     const a = Math.atan2(gy - b.y, aimX - b.x) + gauss() * (1.12 - (tm.att + pb(G, p)) / 100) * .32;
@@ -228,10 +257,10 @@ function tackle(G, p) {
   } else if (!o && d < 3.4) giveBall(G, p);
   else if (!o || o.t !== p.t) p.stun = .25;
 }
-function switchPlayer(G, t) {
-  const c = G.ctrl[t], b = G.ball;
-  const list = G.byTeam[t].filter(p => !p.gk && p !== c).sort((a, q) => hyp(a.x - b.x, a.y - b.y) - hyp(q.x - b.x, q.y - b.y));
-  if (list[0]) G.ctrl[t] = list[0];
+function switchPlayer(G, s) {
+  const t = G.slots[s], b = G.ball;
+  const list = G.byTeam[t].filter(p => !p.gk && !isCtrl(G, p)).sort((a, q) => hyp(a.x - b.x, a.y - b.y) - hyp(q.x - b.x, q.y - b.y));
+  if (list[0]) G.ctrl[s] = list[0];
 }
 function choosePass(G, p, dx, dy) {
   let best = null, bc = 1e9, fb = null, fc = 1e9;
@@ -275,12 +304,15 @@ function bestPassTarget(G, p, allowBack) {
 function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy || 1; const t = clamp(((px - ax) * dx + (py - ay) * dy) / l, 0, 1); return hyp(px - ax - dx * t, py - ay - dy * t); }
 
 /* ---------- Joueur humain ---------- */
-function humanControl(G, t, I, dt) {
-  const b = G.ball, own = b.owner;
-  G.hold[t] = !!I.bDown;
-  let c = G.ctrl[t];
-  if (own && own.t === t && !own.gk && own !== c) c = G.ctrl[t] = own;
-  if (!c || c.gk) c = G.ctrl[t] = nearestToBall(G, t, null);
+function humanControl(G, s, I, dt) {
+  const t = G.slots[s], b = G.ball, own = b.owner;
+  if (I.off) { G.off[s] = true; G.ctrl[s] = null; G.preview[s] = null; G.charge[s] = 0; return; } // joueur parti : l'ordi reprend
+  G.off[s] = false;
+  G.hold[s] = !!I.bDown;
+  let c = G.ctrl[s];
+  if (own && own.t === t && !own.gk && own !== c && !isCtrl(G, own) && nearestSlot(G, t, own) === s) c = G.ctrl[s] = own;
+  if (!c || c.gk) c = G.ctrl[s] = nearestFree(G, t, b.x, b.y);
+  if (!c) return;
   const mag = Math.min(1, I.mag);
   if (c.stun > 0) steer(c, 0, 0, dt, 4);
   else if (mag > .12) { const sp = maxSp(G, c) * (.5 + .5 * mag); steer(c, I.jx / I.mag * sp, I.jy / I.mag * sp, dt); }
@@ -289,23 +321,23 @@ function humanControl(G, t, I, dt) {
 
   if (own === c) {
     const dx = mag > .3 ? I.jx / I.mag : c.fx, dy = mag > .3 ? I.jy / I.mag : c.fy;
-    G.preview[t] = choosePass(G, c, dx, dy);
-    if (I.lob) { passTo(G, c, chooseLongPass(G, c, dx, dy), { loft: true }); G.charge[t] = 0; G.preview[t] = null; }
-    else if (I.a) { passTo(G, c, G.preview[t]); G.charge[t] = 0; G.preview[t] = null; }
+    G.preview[s] = choosePass(G, c, dx, dy);
+    if (I.lob) { passTo(G, c, chooseLongPass(G, c, dx, dy), { loft: true }); G.charge[s] = 0; G.preview[s] = null; }
+    else if (I.a) { passTo(G, c, G.preview[s]); G.charge[s] = 0; G.preview[s] = null; }
     else {
-      if (I.bDown) G.charge[t] = Math.min(1, G.charge[t] + dt / .85);
+      if (I.bDown) G.charge[s] = Math.min(1, G.charge[s] + dt / .85);
       if (I.rel) {
-        const pw = Math.max(.18, I.relCharge || G.charge[t]);
+        const pw = Math.max(.18, I.relCharge || G.charge[s]);
         const aim = mag > .25 ? clamp(I.jx / I.mag * 1.25, -1, 1) : clamp((CX - c.x) / CX * .6, -.6, .6);
-        shoot(G, c, pw, aim); G.charge[t] = 0; G.preview[t] = null;
+        shoot(G, c, pw, aim); G.charge[s] = 0; G.preview[s] = null;
       }
     }
   } else {
-    G.preview[t] = null; G.charge[t] = 0;
+    G.preview[s] = null; G.charge[s] = 0;
     if (own && own.gk && own.t === t && (I.a || I.lob)) {
       const dx = mag > .3 ? I.jx / I.mag : 0, dy = mag > .3 ? I.jy / I.mag : dirOf(t);
       if (I.lob) passTo(G, own, chooseLongPass(G, own, dx, dy), { loft: true }); else passTo(G, own, choosePass(G, own, dx, dy));
-    } else if (I.a) switchPlayer(G, t);
+    } else if (I.a) switchPlayer(G, s);
     if (I.b && !(G.land && !own)) tackle(G, c); // ballon en l'air : TIR sert à préparer la reprise, pas à tacler
   }
 }
@@ -404,7 +436,7 @@ function aiGK(G, p, dt) {
   const b = G.ball, gy = ownY(p.t), d = dirOf(p.t);
   if (b.owner === p) {
     steer(p, 0, 0, dt); p.fx = 0; p.fy = d; p.holdT -= dt;
-    if (p.holdT <= 0 && !(G.cfg.humans[p.t] && p.holdT > -1.2)) {
+    if (p.holdT <= 0 && !(G.hum[p.t] && p.holdT > -1.2)) {
       let m = Math.random() < .7 ? bestPassTarget(G, p, true) : null; if (!m) m = G.byTeam[p.t][Math.random() < .5 ? 1 + (Math.random() * 2 | 0) : 3 + (Math.random() * 2 | 0)]; passTo(G, p, m);
     }
     return;
@@ -433,7 +465,7 @@ function aiField(G, p, dt) {
   const ourLob = G.land && G.passTarget && G.passTarget.t === p.t && G.passTarget !== p; // notre passe en l'air : seul le receveur y va
   if (!gkHas && G.chaser[p.t] === p && !ourLob) {
     const q = G.land || [b.x + b.vx * .3, b.y + b.vy * .3];
-    moveTo(G, p, q[0], q[1], G.land ? 1 : G.cfg.humans[p.t] ? .85 : 1, dt);
+    moveTo(G, p, q[0], q[1], G.land ? 1 : G.hum[p.t] ? .85 : 1, dt);
     if (own && dist(p, b) < 3.3) { p.aiT -= dt; if (p.aiT <= 0) { p.aiT = A.react * rnd(.8, 1.6); if (Math.random() < .32 * A.tack) tackle(G, p); } }
     return;
   }
@@ -562,7 +594,7 @@ export function step(G, inputs, dt) {
     const cand = G.byTeam[t].filter(p => !p.gk && !isCtrl(G, p)).sort((a, q) => hyp(a.x - px, a.y - py) - hyp(q.x - px, q.y - py));
     G.chaser[t] = cand[0] || null; G.cover[t] = cand[1] || null;
   }
-  for (let t = 0; t < 2; t++) if (G.cfg.humans[t]) humanControl(G, t, inputs[t] || blankInput(), dt);
+  for (let s = 0; s < G.slots.length; s++) humanControl(G, s, inputs[s] || blankInput(), dt);
   for (const p of G.players) if (!isCtrl(G, p)) aiPlayer(G, p, dt);
 
   for (const p of G.players) {

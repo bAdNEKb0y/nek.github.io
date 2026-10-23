@@ -164,7 +164,7 @@ export function createRenderer(canvas) {
     const pd = V.p[i], meta = M.players[i], t = meta.t;
     const x = sx(pd[0], pd[1]), y = sy(pd[0], pd[1]), r = PR * R.S * 1.08, kit = M.kit[t];
     const [fx, fy] = sdir(pd[2], pd[3]);
-    const ctrl = V.c[t] === i && M.humans[t];
+    const sl = V.c.indexOf(i), ctrl = sl >= 0 && !!M.humans[sl], mine = sl === R.slot;
     // animation de course (phase selon la distance parcourue à l'écran)
     const an = ANIM[i] || (ANIM[i] = { x, y, ph: 0, sp: 0 });
     const mv = Math.hypot(x - an.x, y - an.y); an.x = x; an.y = y;
@@ -176,10 +176,11 @@ export function createRenderer(canvas) {
     if (ctrl) {
       const c = SIDE_COL[t], pulse = 1 + Math.sin(performance.now() / 160) * .05;
       ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = Math.max(2, R.S * .4);
+      if (!mine && M.coop) { ctx.setLineDash([R.S * .9, R.S * .5]); ctx.lineWidth = Math.max(1.5, R.S * .28); } // coéquipier humain : anneau en pointillés
       ctx.beginPath(); ctx.arc(x, y, r * 1.62 * pulse, 0, Math.PI * 2); ctx.stroke();
-      ctx.globalAlpha = .16; ctx.fillStyle = c; ctx.fill(); ctx.restore();
+      ctx.globalAlpha = mine || !M.coop ? .16 : .07; ctx.fillStyle = c; ctx.fill(); ctx.restore();
     }
-    if (V.pv[t] === i && t === R.me) {
+    if (V.pv[R.slot] === i && t === R.me) {
       ctx.save(); ctx.setLineDash([R.S * .8, R.S * .6]); ctx.strokeStyle = SIDE_COL[t]; ctx.lineWidth = Math.max(1.5, R.S * .3);
       ctx.beginPath(); ctx.arc(x, y, r * 1.58, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
@@ -234,14 +235,19 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
     if (ctrl) { // flèche au-dessus du joueur contrôlé
       const c = SIDE_COL[t], ay = y - r * 2.05 + Math.sin(performance.now() / 180) * r * .12;
-      ctx.fillStyle = c; ctx.strokeStyle = 'rgba(8,12,10,.7)'; ctx.lineWidth = 1.5;
+      ctx.fillStyle = mine || !M.coop ? c : '#ffffff'; ctx.strokeStyle = 'rgba(8,12,10,.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(x - r * .5, ay - r * .5); ctx.lineTo(x + r * .5, ay - r * .5); ctx.lineTo(x, ay + r * .1); ctx.closePath(); ctx.fill(); ctx.stroke();
+      if (M.coop && M.pn?.[sl]) PSEUDOS.push([M.pn[sl], x, ay - r * .6, mine ? c : '#ffffff', r]); // pseudo de l'humain qui le joue
     }
-    if (SET.labels ? (ctrl || V.b[3] === i) : (ctrl && V.b[3] === i && V.ch[t] > 0)) LABELS.push([i, x, y, r, ctrl]);
+    if (SET.labels ? (ctrl || V.b[3] === i) : (ctrl && V.b[3] === i && V.ch[sl] > 0)) LABELS.push([i, x, y, r, ctrl, sl]);
   }
   /** Étiquettes nom + jauge de tir, dessinées après tous les joueurs pour rester lisibles */
-  const LABELS = [];
-  function drawLabel(V, M, [i, x, y, r, ctrl]) {
+  const LABELS = [], PSEUDOS = [];
+  function drawPseudo([nm, x, y, col, r]) {
+    const fz = Math.max(9, r * .72); ctx.font = `800 ${fz}px ${FD}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,10,8,.85)'; ctx.strokeText(nm, x, y); ctx.fillStyle = col; ctx.fillText(nm, x, y);
+  }
+  function drawLabel(V, M, [i, x, y, r, ctrl, sl]) {
     const meta = M.players[i], t = meta.t;
     {
       const nm = `${meta.num} · ${meta.name.toUpperCase()}`, fz = Math.max(9, r * .8);
@@ -250,11 +256,11 @@ export function createRenderer(canvas) {
       ctx.fillStyle = 'rgba(6,12,10,.75)'; rr(x - w / 2 - 5, ly, w + 10, fz + 4, 3); ctx.fill();
       ctx.fillStyle = ctrl ? SIDE_COL[t] : M.kit[t].c1 === '#ffffff' ? CHALK : CHALK; ctx.fillRect(x - w / 2 - 5, ly, 2.5, fz + 4);
       ctx.fillStyle = ctrl ? SIDE_COL[t] : CHALK; ctx.fillText(nm, x + 1, ly + 2);
-      if (ctrl && V.b[3] === i && V.ch[t] > 0) {
+      if (ctrl && V.b[3] === i && V.ch[sl] > 0) {
         const bw = r * 4, bh = Math.max(4, r * .45), by = ly + fz + 7;
         ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(x - bw / 2 - 1, by - 1, bw + 2, bh + 2, 2); ctx.fill();
         const gr = ctx.createLinearGradient(x - bw / 2, 0, x + bw / 2, 0); gr.addColorStop(0, '#7fd99a'); gr.addColorStop(.7, '#ffe08a'); gr.addColorStop(1, '#f0776b');
-        ctx.fillStyle = gr; ctx.fillRect(x - bw / 2, by, bw * V.ch[t], bh);
+        ctx.fillStyle = gr; ctx.fillRect(x - bw / 2, by, bw * V.ch[sl], bh);
       }
     }
   }
@@ -360,7 +366,7 @@ export function createRenderer(canvas) {
   }
 
   function drawControls(V, M, ui) {
-    if (!M.humans[R.me]) return;
+    if (!M.humans[R.slot]) return;
     const g = R.ctrl, I = ui.input;
     if (ui.pad) { drawPadHints(V, M, ui); return; }
     const jx = I.joyOn ? I.jox : g.jx, jy = I.joyOn ? I.joy : g.jy;
@@ -368,7 +374,7 @@ export function createRenderer(canvas) {
     ctx.beginPath(); ctx.arc(jx, jy, g.jr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = I.joyOn ? SIDE_COL[R.me] : 'rgba(238,243,234,.35)';
     ctx.beginPath(); ctx.arc(jx + (I.joyOn ? I.klx : 0), jy + (I.joyOn ? I.kly : 0), g.jr * .45, 0, Math.PI * 2); ctx.fill();
-    const me = R.me, c = V.c[me], own = V.b[3], has = own >= 0 && own === c;
+    const me = R.me, c = V.c[R.slot] ?? -1, own = V.b[3], has = own >= 0 && own === c;
     const gkHas = own >= 0 && M.players[own].gk && M.players[own].t === me;
     const held = I.aDown ? Math.min(1, (performance.now() - I.aT) / 320) : 0;
     drawBtn(g.ax, g.ay, g.ar, held >= 1 ? 'EN L\'AIR' : has ? 'PASSE' : gkHas ? 'RELANCE' : 'CHANGER', I.aFlash > 0 || held >= 1, held >= 1 ? '#ffe08a' : '#e9f1e6', held);
@@ -381,7 +387,7 @@ export function createRenderer(canvas) {
   }
   /** Manette branchée : pas de boutons tactiles, juste un rappel discret des touches */
   function drawPadHints(V, M, ui) {
-    const L = ui.pad, I = ui.input, me = R.me, c = V.c[me], own = V.b[3], has = own >= 0 && own === c;
+    const L = ui.pad, I = ui.input, me = R.me, c = V.c[R.slot] ?? -1, own = V.b[3], has = own >= 0 && own === c;
     const gkHas = own >= 0 && M.players[own].gk && M.players[own].t === me;
     const held = I.aDown ? Math.min(1, (performance.now() - I.aT) / 320) : 0;
     const items = has || gkHas
@@ -490,7 +496,7 @@ export function createRenderer(canvas) {
   }
   R.shk = 0; let shkT = 0;
   R.draw = (V, M, ui) => {
-    R.me = ui.me;
+    R.me = ui.me; R.slot = ui.slot ?? ui.me; // R.me = mon équipe (sens du terrain), R.slot = l'humain que je suis
     const nowT = performance.now(), dtS = Math.min(.1, (nowT - (shkT || nowT)) / 1000); shkT = nowT;
     if (R.shk > 0) { R.shk = Math.max(0, R.shk - dtS); const a = R.shk * 14; canvas.style.transform = R.shk ? `translate(${(Math.random() * 2 - 1) * a}px,${(Math.random() * 2 - 1) * a}px)` : ''; }
     if (V) camera(V);
@@ -501,10 +507,11 @@ export function createRenderer(canvas) {
     drawFlashes();
     const order = V.p.map((p, i) => i).sort((a, b) => sy(V.p[a][0], V.p[a][1]) - sy(V.p[b][0], V.p[b][1]));
     drawLanding(V);
-    LABELS.length = 0;
+    LABELS.length = 0; PSEUDOS.length = 0;
     for (const i of order) drawPlayer(V, M, i);
     drawBall(V);
     for (const L of LABELS) drawLabel(V, M, L);
+    for (const P of PSEUDOS) drawPseudo(P);
     for (const q of ui.parts || []) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.globalAlpha = Math.min(1, q.life); ctx.fillStyle = q.c; ctx.fillRect(-q.r, -q.r / 2, q.r * 2, q.r); ctx.restore(); }
     drawBanner(V, M);
     if (ui.replay) drawReplay(V);

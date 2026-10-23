@@ -48,19 +48,21 @@
   <section id="home" class="screen" hidden>
     <header class="topbar">
       <div class="logo">FOOT <span>DE POCHE</span></div>
-      <div class="hdr-right"><button class="adminbtn" id="bAdmin" hidden aria-label="Panel admin" title="Panel admin">🛠<span class="adb" id="adminBadge" hidden></span></button><span class="coins" id="coinsHome" title="Pièces"></span><div class="me" id="meCard" role="button" tabindex="0" aria-label="Mon profil" title="Mon profil"></div><button class="gear" id="bSettings" aria-label="Paramètres" title="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8.6-2.1-.1-2.8 2-1.6-2-3.4-2.4.9-2.4-1.4-.4-2.6h-4l-.4 2.6-2.4 1.4-2.4-.9-2 3.4 2 1.6-.1 2.8-1.9 1.6 2 3.4 2.4-.9 2.4 1.4.4 2.6h4l.4-2.6 2.4-1.4 2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button></div>
+      <div class="hdr-right"><span class="coins" id="coinsHome" title="Pièces"></span><div class="me" id="meCard" role="button" tabindex="0" aria-label="Mon profil" title="Mon profil"></div><button class="gear" id="bSettings" aria-label="Paramètres" title="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8.6-2.1-.1-2.8 2-1.6-2-3.4-2.4.9-2.4-1.4-.4-2.6h-4l-.4 2.6-2.4 1.4-2.4-.9-2 3.4 2 1.6-.1 2.8-1.9 1.6 2 3.4 2.4-.9 2.4 1.4.4 2.6h4l.4-2.6 2.4-1.4 2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button></div>
     </header>
     <div class="homegrid">
       <div class="col">
         <button class="play-tile" id="bQuick"><small>En ligne</small><b>Partie rapide</b><span id="quickTxt">Trouve un adversaire au hasard</span></button>
         <div class="row2">
           <button class="tile" id="bCreate"><b>Créer une salle</b><span>Donne le code à ton pote</span></button>
-          <form class="tile join" id="joinForm"><b>Rejoindre</b><div class="joinrow"><input id="joinCode" maxlength="4" placeholder="CODE" autocapitalize="characters" spellcheck="false" aria-label="Code de la salle"><button class="btn small" type="submit">OK</button></div></form>
+          <form class="tile join" id="joinForm"><b>Rejoindre</b><div class="joinrow"><input id="joinCode" maxlength="5" placeholder="CODE" autocapitalize="characters" spellcheck="false" aria-label="Code de la salle"><button class="btn small" type="submit">OK</button></div></form>
         </div>
         <div class="row2">
           <button class="tile club" id="bClub"><b>Mon équipe</b><span id="clubTxt">Crée ton équipe avec tes cartes</span></button>
           <button class="tile packs" id="bShop"><b>Packs</b><span id="shopTxt">Ouvre des packs, trouve des légendes</span></button>
         </div>
+        <button class="tile wide team-tile" id="bTeam"><b>Jouer à plusieurs 👥</b><span>Jusqu'à 8 potes : 2 contre 2, 3 contre 3… ou tous ensemble contre l'ordi</span></button>
+        <button class="tile wide admin-tile" id="bAdmin" hidden><b>🛠 Panel admin <span class="adb" id="adminBadge" hidden></span></b><span>Demandes de pièces, comptes, annonces (s'ouvre à part)</span></button>
         <p class="hint">Duel de packs 1 contre 1 : crée une salle, puis choisis le mode « Duel de packs ».</p>
         <button class="tile wide" id="bSolo"><b>Entraînement contre l'ordi</b><span>Gagne des pièces contre l'ordi</span></button>
         <button class="tile wide tuto-tile" id="bTuto"><b>Comment jouer ?</b><span>Le tuto en 9 écrans : passes, tirs, retournées, manette</span></button>
@@ -154,6 +156,30 @@
     </div>
   </section>
 
+  <!-- Salle à plusieurs (jusqu'à 8 joueurs, plusieurs humains dans la même équipe) -->
+  <section id="tlobby" class="screen" hidden>
+    <header class="topbar">
+      <button class="link" id="tLeave">← Quitter la salle</button>
+      <div class="code" id="tCode" title="Touche pour copier le lien"></div>
+      <div class="netpill" id="tNet">Connexion…</div>
+    </header>
+    <div class="lobbygrid">
+      <div class="col">
+        <div class="tsides" id="tSides"></div>
+        <div class="card opts" id="tOpts">
+          <span>Durée</span><div class="chips" id="tDur"></div>
+        </div>
+        <button class="btn primary big" id="tReady">Je suis prêt</button>
+        <button class="btn big" id="tStart" hidden>Lancer le match</button>
+        <p class="hint" id="tHint"></p>
+      </div>
+      <div class="col">
+        <div class="card"><div class="cardhead"><h2>Inviter des amis</h2></div><ul class="friends" id="tFriends"></ul>
+          <p class="hint">Ou donne le code de la salle : tes potes le tapent dans « Rejoindre ».</p></div>
+      </div>
+    </div>
+  </section>
+
   <!-- Duel de packs -->
   <section id="pduel" class="screen" hidden>
     <div class="wrap1200">
@@ -198,7 +224,6 @@
   <div id="pack" class="overlay pk" hidden></div>
   <div id="picker" class="overlay sheet" hidden></div>
   <div id="tuto" class="overlay tuto" hidden></div>
-  <div id="admin" class="overlay sheet setov profov" hidden></div>
   <div id="settings" class="overlay sheet setov" hidden></div>
   <div id="profile" class="overlay sheet setov profov" hidden></div>
   <div id="chat" class="overlay sheet setov profov" hidden></div>

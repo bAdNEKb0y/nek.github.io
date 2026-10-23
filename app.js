@@ -7,7 +7,7 @@ import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundO
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
-import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList } from './social.js';
+import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList, inviteToRoom, isOnline } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
 import { initBank, stopBank, renderCoinShop, refreshCoinShop, openAdmin, closeAdmin } from './bank.js';
@@ -18,7 +18,7 @@ const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? 
 const teamIdx = short => Math.max(0, TEAMS.findIndex(t => t.short === short));
 
 /* ---------- Écrans ---------- */
-const SCREENS = ['auth', 'home', 'club', 'shop', 'lobby', 'pduel', 'game', 'end'];
+const SCREENS = ['auth', 'home', 'club', 'shop', 'lobby', 'tlobby', 'pduel', 'game', 'end'];
 function show(id) { SCREENS.forEach(s => { $('#' + s).hidden = s !== id; }); }
 let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
@@ -42,7 +42,7 @@ function playEvent(type, val) {
 // petit clic sur les boutons des menus
 document.addEventListener('click', e => { if (e.target.closest('button') && !e.target.closest('#game')) { audio(); SND.click(); } }, true);
 /** Invité : le son de frappe part tout de suite au doigt, sans attendre le retour de l'hôte */
-function localKick(p) { if (GAME?.online && GAME.side === 1 && myBall()) { SND.kick(p); GAME.localKickAt = performance.now(); } }
+function localKick(p) { if (GAME?.online && !GAME.host && myBall()) { SND.kick(p); GAME.localKickAt = performance.now(); } }
 
 /* ---------- Compte ---------- */
 let ME = null; // profil
@@ -97,15 +97,15 @@ async function afterLogin() {
     if (!asked && (st === 'off' || st === 'ios-home')) { try { localStorage.setItem('fdp-push-asked', '1'); } catch { } setTimeout(() => toast(st === 'ios-home' ? '🔔 Pour recevoir les notifs de tes amis : Partager ⬆️ → « Sur l\'écran d\'accueil ». Détails dans ⚙️ Paramètres.' : '🔔 Active les notifications dans ⚙️ Paramètres pour savoir quand tes amis t\'écrivent.'), 4500); }
   });
   initSocial({ me: () => ME, col: () => COL, toast, busy: () => !!GAME || !!ROOM, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); }, inMatch: () => !!GAME && !GAME.done,
-    createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => enterRoom(cleanCode(c), 'guest'), onMeChange: () => renderMe(),
-    reloadCol: async () => { await loadCollection(); renderMe(); }, alone: code => !!ROOM && LOB?.code === code && !LOB.peer, leaveIfAlone: code => { if (ROOM && LOB?.code === code && !LOB.peer && !GAME) leaveRoom(); },
+    createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => joinAny(cleanCode(c)), onMeChange: () => renderMe(),
+    reloadCol: async () => { await loadCollection(); renderMe(); }, alone: code => !!ROOM && LOB?.code === code && (LOB.multi ? !ROOM.peers.length : !LOB.peer), leaveIfAlone: code => { if (ROOM && LOB?.code === code && !(LOB.multi ? ROOM.peers.length : LOB.peer) && !GAME) leaveRoom(); },
     playing: () => (!!GAME && !GAME.done) || (!!DUEL && !DUEL.done) || (!!ROOM && !!LOB?.peer) });
   initBank({ me: () => ME, toast, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); },
     reloadCol: async () => { await loadCollection(); renderMe(); if (!$('#shop').hidden) renderShop(); }, openShop: () => { if (!GAME) { SHOP_TAB = 'packs'; openShop(); } } });
   if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
   else if (!tutoSeen()) openTuto();
   const q = new URLSearchParams(location.search).get('salle');
-  if (q) { history.replaceState(null, '', location.pathname); enterRoom(cleanCode(q), 'guest'); }
+  if (q) { history.replaceState(null, '', location.pathname); joinAny(cleanCode(q)); }
 }
 $('#bLogout').addEventListener('click', async () => { stopSocial(); stopBank(); closeAdmin(); await sb.auth.signOut(); ME = null; show('auth'); });
 
@@ -155,9 +155,12 @@ $('#bCreate').addEventListener('click', () => { audio(); enterRoom(newCode(), 'h
 $('#joinForm').addEventListener('submit', e => {
   e.preventDefault(); audio();
   const c = cleanCode($('#joinCode').value);
-  if (c.length !== 4) { $('#homeErr').textContent = 'Le code d\'une salle fait 4 caractères.'; return; }
-  $('#joinCode').value = ''; enterRoom(c, 'guest');
+  if (c.length < 4) { $('#homeErr').textContent = 'Le code d\'une salle fait 4 ou 5 caractères.'; return; }
+  $('#joinCode').value = ''; joinAny(c);
 });
+/** Code à 4 caractères = salle 1 contre 1, à 5 = salle à plusieurs */
+function joinAny(c) { if (c.length === 5) enterTeamRoom(c, 'guest'); else if (c.length === 4) enterRoom(c, 'guest'); }
+$('#bTeam').addEventListener('click', () => { audio(); enterTeamRoom(newCode() + newCode()[0], 'host'); });
 $('#bSolo').addEventListener('click', () => { audio(); if (!tutoSeen()) openTuto(startSolo); else startSolo(); });
 $('#bTuto').addEventListener('click', () => openTuto());
 $('#meCard').addEventListener('click', () => ME && openProfile(ME.id));
@@ -165,7 +168,6 @@ $('#friendAdd').addEventListener('submit', async e => { e.preventDefault(); cons
 $('#profile').addEventListener('click', e => { if (e.target.id === 'profile') closeProfile(); });
 $('#chat').addEventListener('click', e => { if (e.target.id === 'chat') closeChat(); });
 $('#trade').addEventListener('click', e => { if (e.target.id === 'trade') closeTrade(); });
-$('#admin').addEventListener('click', e => { if (e.target.id === 'admin') closeAdmin(); });
 $('#bTrades').addEventListener('click', openTrades);
 
 /* ---------- Paramètres ---------- */
@@ -383,14 +385,112 @@ async function leaveRoom() {
   ME = await loadProfile() || ME; await loadCollection(); renderHome(); show('home');
 }
 $('#bLeave').addEventListener('click', leaveRoom);
+
+/* ---------- Salle à plusieurs (plusieurs humains dans la même équipe) ---------- */
+const TMAX = 8, SIDE_MAX = 4; // 4 joueurs de champ par équipe (le gardien reste à l'ordi)
+const SIDE_NAME = ['Équipe A', 'Équipe B'];
+async function enterTeamRoom(code, role) {
+  if (ROOM) await ROOM.leave();
+  const fav = teamIdx(ME.fav_team);
+  LOB = { code, role, multi: true, side: role === 'host' ? 0 : 1, ready: role === 'host', ca: fav, cb: (fav + 7) % TEAMS.length, dur: 180, matchNo: 0, members: [], picked: role === 'host', peer: null };
+  const room = new Room(code, { uid: ME.id, name: ME.display, rating: ME.rating }, role, { max: TMAX, prefix: 'team:' });
+  ROOM = room;
+  Object.assign(room.state, { side: LOB.side, ready: LOB.ready, ca: LOB.ca, cb: LOB.cb, dur: LOB.dur });
+  room.on('peers', list => {
+    LOB.members = list;
+    if (!LOB.picked && list.some(p => p.uid === ME.id) && list.some(p => p.role === 'host')) { // un invité se met dans l'équipe la moins remplie
+      LOB.picked = true;
+      const n = [0, 1].map(t => list.filter(p => p.uid !== ME.id && p.side === t).length);
+      const side = n[0] <= n[1] ? 0 : 1;
+      if (side !== LOB.side) { LOB.side = side; room.setState({ side }); }
+    }
+    renderTLobby();
+  });
+  room.on('peer', p => { LOB.peer = p; renderTNet(); if (GAME && GAME.multi && !GAME.host) { GAME.peerSeen = p ? performance.now() : GAME.peerSeen; } });
+  room.on('link', l => { if (GAME) GAME.net = l; renderTNet(); });
+  room.on('full', () => { toast('Cette salle est complète (8 joueurs maximum).'); leaveRoom(); });
+  room.on('msg', onRoomMsg);
+  $('#tCode').textContent = code;
+  renderTLobby(); show('tlobby');
+  try { await room.join(); renderTNet(); }
+  catch { if (ROOM === room) { toast('Connexion à la salle impossible. Vérifie ta connexion.'); leaveRoom(); } return; }
+  if (role === 'guest') setTimeout(() => { if (ROOM === room && !LOB?.peer && !GAME) toast('Personne n\'a créé cette salle… vérifie le code avec ton pote.'); }, 12000);
+}
+function renderTNet() {
+  const el = $('#tNet'); if (!el || !LOB?.multi) return;
+  const n = (LOB.members || []).length || 1;
+  el.textContent = `${n} / ${TMAX} joueur${n > 1 ? 's' : ''}`; el.className = 'netpill' + (n > 1 ? ' ok' : '');
+}
+function tState() {
+  // l'hôte décide des clubs et de la durée ; tout le monde lit son état
+  const host = LOB.role === 'host' ? { ...ROOM.state, uid: ME.id } : (LOB.members || []).find(p => p.role === 'host');
+  return { ca: host?.ca ?? LOB.ca, cb: host?.cb ?? LOB.cb, dur: host?.dur ?? LOB.dur };
+}
+function renderTLobby() {
+  if (!LOB?.multi) return;
+  const host = LOB.role === 'host', st = tState();
+  const members = (LOB.members?.length ? LOB.members : [{ uid: ME.id, name: ME.display, rating: ME.rating, role: LOB.role, ...ROOM?.state }])
+    .map(p => p.uid === ME.id ? { ...p, side: LOB.side, ready: LOB.ready } : p);
+  const side = t => members.filter(p => (p.side ?? 1) === t);
+  const col = t => {
+    const tm = TEAMS[t === 0 ? st.ca : st.cb] || TEAMS[0], list = side(t), bots = Math.max(0, 4 - list.length);
+    return `<div class="tside s${t}">
+      <div class="tsh">${shirtSVG(tm.h)}<div><small>${SIDE_NAME[t]}</small><b>${esc(tm.name)}</b></div>
+        ${host ? `<select class="tsel" data-club="${t}" aria-label="Club de l'${SIDE_NAME[t]}">${TEAMS.map((x, i) => `<option value="${i}" ${i === (t === 0 ? st.ca : st.cb) ? 'selected' : ''}>${esc(x.short)} · ${esc(x.name)}</option>`).join('')}</select>` : ''}</div>
+      <ul class="tplist">${list.map(p => `<li class="${p.uid === ME.id ? 'me' : ''}"><span class="tdot ${p.ready || p.role === 'host' ? 'on' : ''}"></span><b>${esc(p.name)}</b>${p.role === 'host' ? '<i class="tag">hôte</i>' : ''}<small>${p.role === 'host' ? 'lance le match' : p.ready ? 'prêt ✓' : 'pas prêt'}</small></li>`).join('')}
+        ${bots ? `<li class="bot"><small>${list.length ? `+ ${bots} joueur${bots > 1 ? 's' : ''} ordi` : `${bots} joueurs ordi`} et le gardien</small></li>` : '<li class="bot"><small>+ le gardien (ordi)</small></li>'}</ul>
+      ${LOB.side !== t ? `<button class="btn small" data-side="${t}" ${list.length >= SIDE_MAX || (LOB.ready && !host) ? 'disabled' : ''}>→ ${SIDE_NAME[t]}</button>` : '<span class="tyou">Tu es ici</span>'}
+    </div>`;
+  };
+  $('#tSides').innerHTML = col(0) + '<div class="vsx">VS</div>' + col(1);
+  $('#tSides').querySelectorAll('[data-side]').forEach(b => b.onclick = () => { LOB.side = +b.dataset.side; ROOM.setState({ side: LOB.side }); renderTLobby(); });
+  $('#tSides').querySelectorAll('[data-club]').forEach(sel => sel.onchange = () => { const k = sel.dataset.club === '0' ? 'ca' : 'cb'; LOB[k] = +sel.value; ROOM.setState({ [k]: LOB[k] }); renderTLobby(); });
+  $('#tDur').innerHTML = [[120, '2 min'], [180, '3 min'], [300, '5 min']].map(([v, l]) => `<button class="chip" data-tdur="${v}" aria-pressed="${st.dur === v}" ${host ? '' : 'disabled'}>${l}</button>`).join('');
+  $('#tDur').querySelectorAll('[data-tdur]').forEach(b => b.onclick = () => { LOB.dur = +b.dataset.tdur; ROOM.setState({ dur: LOB.dur }); renderTLobby(); });
+  const others = members.filter(p => p.uid !== ME.id), notReady = others.filter(p => !p.ready);
+  const full = [0, 1].some(t => side(t).length > SIDE_MAX);
+  $('#tReady').hidden = host; $('#tStart').hidden = !host;
+  $('#tReady').textContent = LOB.ready ? 'Annuler' : 'Je suis prêt'; $('#tReady').classList.toggle('primary', !LOB.ready);
+  const canStart = others.length >= 1 && !notReady.length && !full;
+  $('#tStart').disabled = !canStart; $('#tStart').classList.toggle('primary', canStart);
+  $('#tHint').textContent = host
+    ? (!others.length ? `Invite tes potes (à droite) ou donne-leur le code ${LOB.code}. Ils le tapent dans « Rejoindre ».` : notReady.length ? `En attente : ${notReady.map(p => p.name).join(', ')}` : full ? 'Maximum 4 joueurs par équipe.' : 'Tout le monde est prêt : lance le match !')
+    : LOB.ready ? 'Prêt ! L\'hôte va lancer le match.' : 'Choisis ton équipe puis touche « Je suis prêt ». Vous pouvez tous être dans la même équipe contre l\'ordi !';
+  // amis à inviter
+  const fl = friendsList(), inRoom = new Set(members.map(p => p.uid));
+  $('#tFriends').innerHTML = fl.length ? fl.map(f => `<li class="friend"><span class="tdot ${isOnline(f.id) ? 'on' : ''}"></span><b>${esc(f.display)}</b>
+    ${inRoom.has(f.id) ? '<small class="muted">dans la salle</small>' : `<button class="btn small" data-inv="${f.id}">${isOnline(f.id) ? 'Inviter' : 'Notifier'}</button>`}</li>`).join('') : '<li class="muted">Ajoute des amis depuis l\'accueil pour les inviter ici.</li>';
+  $('#tFriends').querySelectorAll('[data-inv]').forEach(b => b.onclick = () => { const f = fl.find(x => x.id === b.dataset.inv); inviteToRoom(f, LOB.code); b.disabled = true; b.textContent = 'Invité ✓'; });
+  renderTNet();
+}
+$('#tLeave').addEventListener('click', leaveRoom);
+$('#tCode').addEventListener('click', async () => {
+  const url = `${location.origin}${location.pathname}?salle=${LOB.code}`;
+  try { await navigator.clipboard.writeText(url); toast('Lien d\'invitation copié'); } catch { toast(`Code de la salle : ${LOB.code}`); }
+});
+$('#tReady').addEventListener('click', () => { audio(); LOB.ready = !LOB.ready; ROOM.setState({ ready: LOB.ready, side: LOB.side }); renderTLobby(); });
+$('#tStart').addEventListener('click', () => {
+  if (!LOB?.multi || LOB.role !== 'host' || GAME) return;
+  audio(); goFull();
+  const others = (LOB.members || []).filter(p => p.uid !== ME.id && p.ready);
+  const members = [{ uid: ME.id, name: ME.display, side: LOB.side }, ...others.map(p => ({ uid: p.uid, name: p.name, side: p.side ?? 1 }))];
+  if ([0, 1].some(t => members.filter(p => p.side === t).length > SIDE_MAX)) { toast('Maximum 4 joueurs par équipe.'); return; }
+  const st = tState(), teams = [TEAMS[st.ca], TEAMS[st.cb]];
+  const nm = t => members.filter(p => p.side === t).map(p => p.name).join(' · ') || 'Ordi';
+  LOB.matchNo++;
+  const cfg = { multi: true, teams, dur: st.dur, n: LOB.matchNo, mid: `${LOB.code}-${Math.random().toString(36).slice(2, 7)}`, diff: 1,
+    slots: members.map(p => p.side), uids: members.map(p => p.uid), pn: members.map(p => p.name), names: [nm(0), nm(1)] };
+  ROOM.send('tstart', cfg); setTimeout(() => ROOM?.send('tstart', cfg), 500); // envoyé deux fois au cas où
+  startMulti(cfg, 0);
+});
 // notification touchée alors que le jeu est déjà ouvert
 navigator.serviceWorker?.addEventListener('message', e => {
   if (e.data?.type !== 'open' || !ME) return;
   let u; try { u = new URL(e.data.url); } catch { return; }
   const salle = cleanCode(u.searchParams.get('salle'));
-  if (salle.length === 4) {
+  if (salle.length >= 4) {
     if ((GAME && !GAME.done) || (DUEL && !DUEL.done)) { toast('Termine ton match d\'abord.'); return; }
-    if (LOB?.code !== salle) enterRoom(salle, 'guest');
+    if (LOB?.code !== salle) joinAny(salle);
   } else if (u.searchParams.get('admin') && ME.is_admin) openAdmin();
 });
 $('#roomCode').addEventListener('click', async () => {
@@ -464,13 +564,28 @@ async function maybeStart() {
   startOnline(cfg, 0);
 }
 function onRoomMsg(k, d) {
-  if (k === 'start' && LOB?.role === 'guest' && !GAME) { LOB.matchNo = d.n; startOnline(d, 1); return; }
+  if (k === 'start' && LOB?.role === 'guest' && !LOB.multi && !GAME) { LOB.matchNo = d.n; startOnline(d, 1); return; }
+  if (k === 'tstart' && LOB?.multi && LOB.role === 'guest' && !GAME) {
+    const s = (d.uids || []).indexOf(ME.id);
+    if (s < 0) { toast('Le match a commencé sans toi (salle pleine ou tu n\'étais pas prêt).'); return; }
+    LOB.matchNo = d.n; startMulti(d, s); return;
+  }
   if (k.startsWith('d') && onDuelMsg(k, d)) return;
   if (!GAME) return;
-  if (k === 's' && GAME.side === 1) GAME.onSnap(d);
-  else if (k === 'i' && GAME.side === 0) GAME.remote = d;
-  else if (k === 'end' && GAME.side === 1) GAME.onEnd(d);
-  else if (k === 'quit') GAME.forfeit(true, 'Ton adversaire a abandonné.');
+  if (k === 's' && !GAME.host) GAME.onSnap(d);
+  else if (k === 'i' && GAME.host) { const s = GAME.multi ? d.s : 1; if (s > 0 && s < GAME.slots.length) GAME.remotes[s] = d; }
+  else if (k === 'end' && !GAME.host) GAME.onEnd(d);
+  else if (k === 'quit') {
+    if (!GAME.multi) GAME.forfeit(true, 'Ton adversaire a abandonné.');
+    else if (d?.host) GAME.forfeit(false, 'L\'hôte a quitté le match.');
+    else if (GAME.host && d?.s > 0) GAME.remotes[d.s] = null, (GAME.left ||= new Set()).add(d.s);
+  }
+}
+/** Hôte d'un match à plusieurs : cet humain est parti ? (l'ordi reprend son joueur) */
+function slotGone(g, s) {
+  if (!g.multi) return false;
+  if (g.left?.has(s)) return true;
+  const uid = g.uids?.[s]; return !!uid && !!ROOM && !ROOM.peers.some(p => p.uid === uid);
 }
 
 
@@ -588,7 +703,7 @@ const R = createRenderer(cv);
 const LI = { tx: 0, ty: 0, joyOn: false, jox: 0, joy: 0, jlx: 0, jly: 0, klx: 0, kly: 0, a: 0, l: 0, b: 0, rel: 0, relCharge: 0, bDown: false, aFlash: 0, aDown: false, aT: 0 };
 const LOB_MS = 320; // appui long sur PASSE = ballon en l'air
 /** PASSE : sans ballon on agit tout de suite (changer de joueur) ; avec le ballon on attend le relâchement (court = passe, long = en l'air) */
-function myBall() { const V = GAME?.V; if (!V) return false; const own = V.b[3], me = GAME.side; return own >= 0 && (own === V.c[me] || (GAME.M.players[own].gk && GAME.M.players[own].t === me)); }
+function myBall() { const V = GAME?.V; if (!V) return false; const own = V.b[3], me = GAME.side; return own >= 0 && (own === V.c[GAME.slot] || (GAME.M.players[own].gk && GAME.M.players[own].t === me)); }
 function aPress() { if (myBall()) { LI.aDown = true; LI.aT = performance.now(); } else { LI.a++; LI.aFlash = .15; buzz(8); } }
 function aRelease() { if (!LI.aDown) return; LI.aDown = false; localKick(.8); if (performance.now() - LI.aT >= LOB_MS) { LI.l++; buzz([10, 30, 18]); } else { LI.a++; buzz(8); } LI.aFlash = .15; }
 const ptrs = new Map();
@@ -653,7 +768,6 @@ function closeTop() {
   if (!$('#chat').hidden) { closeChat(); return true; }
   if (!$('#profile').hidden) { closeProfile(); return true; }
   if (!$('#settings').hidden) { closeSettings(); return true; }
-  if (!$('#admin').hidden) { closeAdmin(); return true; }
   if (!$('#menu').hidden) { $('#menu').hidden = true; return true; }
   for (const id of ['tuto', 'pack', 'picker']) {
     const o = $('#' + id); if (o.hidden) continue;
@@ -699,7 +813,7 @@ function metaOf(cfg, humans, names) {
   const team = cfg.teams || [TEAMS[cfg.t0], TEAMS[cfg.t1]];
   const players = [];
   for (let t = 0; t < 2; t++) team[t].sq.forEach((q, i) => players.push({ t, i, gk: i === 0, num: q[1], name: q[0], r: q[2] }));
-  return { team, kit: pickKits(team[0], team[1]), players, humans, names, dur: cfg.dur };
+  return { team, kit: pickKits(team[0], team[1]), players, humans, names, dur: cfg.dur, coop: !!cfg.multi, pn: cfg.pn || null };
 }
 function resetLocalInput() { Object.assign(LI, { tx: 0, ty: 0, joyOn: false, a: 0, l: 0, b: 0, rel: 0, relCharge: 0, bDown: false, aDown: false }); ptrs.clear(); }
 
@@ -712,21 +826,30 @@ function startSolo() {
 function startOnline(cfg, side) {
   beginGame({ cfg, side, online: true, names: cfg.names, uids: cfg.uids });
 }
-function beginGame({ cfg, side, online, names, uids }) {
+/** Match à plusieurs : slot = quel humain je suis, side = mon équipe */
+function startMulti(cfg, slot) {
+  beginGame({ cfg, side: cfg.slots[slot], slot, host: slot === 0, online: true, multi: true, names: cfg.names, uids: cfg.uids });
+}
+function beginGame({ cfg, side, online, names, uids, slot = side, host = side === 0, multi = false }) {
   resetLocalInput();
-  const humans = [true, online];
+  const slots = multi ? cfg.slots : online ? [0, 1] : [0];
+  const humans = multi ? slots.map(() => true) : [true, online];
   const M = metaOf(cfg, humans, names);
   const g = {
-    cfg, side, online, M, names, uids, V: null, parts: [], lastEv: 0, localCharge: 0, net: ROOM?.linkInfo(),
-    remote: null, prevL: { a: 0, l: 0, b: 0, r: 0 }, prevR: { a: 0, l: 0, b: 0, r: 0 }, snaps: [], lastSnapAt: performance.now(),
+    cfg, side, slot, host, multi, slots, online, M, names, uids, V: null, parts: [], lastEv: 0, localCharge: 0, net: ROOM?.linkInfo(),
+    remotes: [], prevs: slots.map(() => ({ a: 0, l: 0, b: 0, r: 0 })), prevL: { a: 0, l: 0, b: 0, r: 0 }, snaps: [], lastSnapAt: performance.now(),
     acc: 0, tick: 0, sentAt: 0, lastSent: '', done: false, peerGoneAt: 0, endData: null,
   };
-  if (side === 0) g.G = createMatch({ teams: M.team, dur: cfg.dur, humans, diff: cfg.diff ?? 1 });
+  if (host) g.G = createMatch({ teams: M.team, dur: cfg.dur, humans, slots, diff: cfg.diff ?? 1 });
   g.onSnap = d => { const now = performance.now(); const dtA = now - g.lastSnapAt; if (dtA > 0 && dtA < 400) { g.ia = g.ia ? g.ia * .9 + dtA * .1 : dtA; g.jit = (g.jit || 0) * .9 + Math.abs(dtA - g.ia) * .1; } g.lastSnapAt = now; if (g.snaps.length && d.q <= g.snaps[g.snaps.length - 1].q) return; g.snaps.push({ at: now, q: d.q, s: d.s }); if (g.snaps.length > 30) g.snaps.shift(); };
   g.onEnd = d => { if (!g.done) finishGame(d); };
-  g.forfeit = (iWin, msg) => { if (g.done) return; const sc = iWin ? [3, 0] : [0, 3]; finishGame({ forfeit: true, msg, score: side === 0 ? sc : [sc[1], sc[0]] }); };
+  g.forfeit = (iWin, msg) => {
+    if (g.done) return;
+    if (multi) { finishGame({ forfeit: true, msg, score: g.V?.sc || [0, 0] }); return; } // à plusieurs : on garde le score
+    const sc = iWin ? [3, 0] : [0, 3]; finishGame({ forfeit: true, msg, score: side === 0 ? sc : [sc[1], sc[0]] });
+  };
   g.rec = createRecorder();
-  GAME = g; R.me = side; audio(); crowdStart();
+  GAME = g; R.me = side; R.slot = slot; audio(); crowdStart();
   show('game'); $('#menu').hidden = true;
   R.resize(); requestAnimationFrame(() => R.resize());
   keepAwake();
@@ -778,15 +901,15 @@ function frame(now) {
     LI.aFlash = Math.max(0, LI.aFlash - dt);
     const mine = localWorldInput();
     const paused = !$('#menu').hidden && !g.online;
-    if (g.side === 0) {
+    if (g.host) {
       // Hôte (ou solo) : fait tourner la simulation
-      const peerMissing = g.online && !ROOM?.peer;
+      const peerMissing = g.online && !g.multi && !ROOM?.peer;
       if (peerMissing) { g.peerGoneAt ||= now; if (now - g.peerGoneAt > 15000) g.forfeit(true, 'Ton adversaire s\'est déconnecté.'); }
       else g.peerGoneAt = 0;
       if (!paused && !peerMissing) {
         g.acc += dt;
         while (g.acc >= STEP) {
-          step(g.G, [toEngine(mine, g.prevL), g.online ? toEngine(g.remote, g.prevR) : null], STEP);
+          step(g.G, g.slots.map((t, s) => s === g.slot ? toEngine(mine, g.prevL) : slotGone(g, s) ? { off: true } : toEngine(g.remotes[s], g.prevs[s])), STEP);
           g.acc -= STEP; g.tick++;
           if (g.online && g.tick % (ROOM.mode === 'p2p' ? 2 : 3) === 0) ROOM.send('s', { q: g.tick, s: snapshot(g.G) }, true);
         }
@@ -800,10 +923,10 @@ function frame(now) {
     } else {
       // Invité : envoie ses entrées, affiche l'état reçu
       const key = JSON.stringify([+mine.jx.toFixed(2), +mine.jy.toFixed(2), +mine.m.toFixed(2), mine.a, mine.l, mine.b, mine.d, mine.r]);
-      if (key !== g.lastSent || now - g.sentAt > 60) { ROOM?.send('i', mine, true); g.lastSent = key; g.sentAt = now; }
+      if (key !== g.lastSent || now - g.sentAt > 60) { ROOM?.send('i', { ...mine, s: g.slot }, true); g.lastSent = key; g.sentAt = now; }
       g.V = interp(g.snaps, now) || g.V;
       predictOwn(g, mine, dt, now, ROOM?.rtt);
-      if (now - g.lastSnapAt > 15000 && !ROOM?.peer) g.forfeit(true, 'Ton adversaire s\'est déconnecté.');
+      if (now - g.lastSnapAt > 15000 && !ROOM?.peer) g.forfeit(true, g.multi ? 'L\'hôte s\'est déconnecté : match arrêté.' : 'Ton adversaire s\'est déconnecté.');
       if (g.V?.end && !g.endTimer) g.endTimer = setTimeout(() => { if (!g.done) finishGame({ score: g.V.sc, partial: true }); }, 3000);
     }
     if (g.V) g.rec?.push(g.V, now); // enregistrement du replay
@@ -813,7 +936,7 @@ function frame(now) {
     if (g.V) crowdLevel(1 - Math.min(g.V.b[1], FL - g.V.b[1]) / 30);
     // Charge du tir affichée localement
     if (g.V) {
-      const hasBall = g.V.b[3] >= 0 && g.V.b[3] === g.V.c[g.side];
+      const hasBall = g.V.b[3] >= 0 && g.V.b[3] === g.V.c[g.slot];
       g.localCharge = LI.bDown && hasBall ? Math.min(1, g.localCharge + dt / .85) : LI.bDown ? g.localCharge : 0;
       // Sons et effets à partir des événements
       for (const [s, type, val] of g.V.ev || []) {
@@ -827,13 +950,13 @@ function frame(now) {
     for (const q of g.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 300 * dt; q.rot += dt * 6; q.life -= dt; }
     g.parts = g.parts.filter(q => q.life > 0);
     let overlay = null;
-    if (g.online && g.side === 1 && now - g.lastSnapAt > 2500) overlay = 'Connexion perdue… reconnexion';
-    if (g.online && g.side === 0 && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
-    if (g.online && g.side === 1 && !ROOM?.peer && g.V) overlay = `${g.names[0]} s'est déconnecté…`;
+    if (g.online && !g.host && now - g.lastSnapAt > 2500) overlay = 'Connexion perdue… reconnexion';
+    if (g.online && !g.multi && g.host && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
+    if (g.online && !g.host && !ROOM?.peer && g.V) overlay = g.multi ? `${g.cfg.pn?.[0] || 'L\'hôte'} s'est déconnecté…` : `${g.names[0]} s'est déconnecté…`;
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
     const rp = replayFrame(g, now);
     if (SET.saver && (g.fr = (g.fr || 0) + 1) % 2) { requestAnimationFrame(frame); return; } // économie : 30 images/s
-    R.draw(rp || g.V, g.M, { me: g.side, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
+    R.draw(rp || g.V, g.M, { me: g.side, slot: g.slot, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
   }
   requestAnimationFrame(frame);
 }
@@ -848,7 +971,7 @@ $('#bFull').addEventListener('click', () => { goFull(); $('#menu').hidden = true
 $('#bQuit').addEventListener('click', () => {
   $('#menu').hidden = true;
   if (!GAME) return;
-  if (GAME.online) { ROOM?.send('quit', {}); GAME.forfeit(false, 'Tu as abandonné le match.'); }
+  if (GAME.online) { ROOM?.send('quit', { host: GAME.host, s: GAME.slot }); GAME.forfeit(false, GAME.multi ? 'Tu as quitté le match.' : 'Tu as abandonné le match.'); }
   else { stopReplay(GAME); crowdStop(); GAME = null; renderHome(); show('home'); }
 });
 
@@ -868,7 +991,10 @@ async function finishGame(sum) {
   const myS = sc[me], opS = sc[op];
   // Enregistrement du résultat (chacun enregistre le sien)
   let rating = null;
-  if (g.online && g.uids && ME) {
+  if (g.multi && ME) {
+    // match à plusieurs : pas de classement, des pièces comme contre l'ordi
+    if (!sum.forfeit || g.host) { const { data, error } = await sb.rpc('reward_solo', { p_my_score: myS, p_opp_score: opS }); if (!error && data) { g.solo = data.reward; if (COL) COL.coins = data.coins; } else if (error && /too_soon/.test(error.message || '')) g.solo = -1; }
+  } else if (g.online && g.uids && ME) {
     const { data, error } = await sb.rpc('report_match', {
       p_room: String(g.cfg.mid || `${LOB?.code}-${Date.now() % 1e6}`).slice(0, 12), p_opponent: g.uids[op],
       p_my_team: M.team[me].short, p_opp_team: M.team[op].short, p_my_score: myS, p_opp_score: opS, p_is_home: me === 0,
@@ -890,7 +1016,7 @@ function renderEnd(g, sum, rating) {
   const myS = sc[me], opS = sc[op], res = myS > opS ? 'w' : myS < opS ? 'l' : 'd';
   const goals = t => { const l = (sum.scorers || []).filter(x => x.t === t); return l.length ? l.map(x => `<li><b>${esc(x.name)}</b>${x.own ? ' (csc)' : ''} <span>${x.min}'</span></li>`).join('') : '<li class="muted">—</li>'; };
   $('#endBoard').innerHTML = `<div class="sboard" style="--k0:${M.kit[me].c1};--k1:${M.kit[op].c1}">
-    <div class="sb-top"><span>${g.online ? 'Match en ligne' : 'Entraînement'}</span><b>${sum.forfeit ? 'Abandon' : "Terminé · 90'"}</b></div>
+    <div class="sb-top"><span>${g.multi ? 'Match à plusieurs' : g.online ? 'Match en ligne' : 'Entraînement'}</span><b>${sum.forfeit ? 'Abandon' : "Terminé · 90'"}</b></div>
     <div class="sb-row">
       <div class="side"><div class="shirt">${shirtSVG(M.kit[me])}</div><b>${esc(M.team[me].name)}</b><small>${esc(g.names[me])}</small></div>
       <div class="sc">${myS}<i>–</i>${opS}</div>
@@ -899,7 +1025,7 @@ function renderEnd(g, sum, rating) {
     ${sum.players && sum.scorers?.length ? `<div class="sb-goals"><ul>${goals(me)}</ul><ul>${goals(op)}</ul></div>` : ''}
   </div>
   <div class="verdict ${res}">${res === 'w' ? 'Victoire !' : res === 'l' ? 'Défaite' : 'Match nul'}</div>${sum.msg ? `<p class="hint">${esc(sum.msg)}</p>` : ''}`;
-  $('#endRating').innerHTML = rating ? `<div class="rating"><span>Classement</span><b>${rating.after}</b><span class="d ${rating.after >= rating.before ? 'up' : 'down'}">${rating.after >= rating.before ? '+' : ''}${rating.after - rating.before}</span><span class="coins" style="margin-left:auto">+${rating.coins}</span></div>` : g.online ? '' : g.solo > 0 ? `<div class="rating"><span>Entraînement</span><b style="font-size:1rem">Pièces gagnées</b><span class="coins" style="margin-left:auto">+${g.solo}</span></div><p class="hint">Contre l'ordi : moins de pièces qu'en ligne, et le classement ne bouge pas.</p>` : g.solo === -1 ? '<p class="hint">Match trop court pour gagner des pièces. Contre l\'ordi, les pièces arrivent après un vrai match.</p>' : '<p class="hint">Les matchs d\'entraînement ne comptent pas au classement.</p>';
+  $('#endRating').innerHTML = rating ? `<div class="rating"><span>Classement</span><b>${rating.after}</b><span class="d ${rating.after >= rating.before ? 'up' : 'down'}">${rating.after >= rating.before ? '+' : ''}${rating.after - rating.before}</span><span class="coins" style="margin-left:auto">+${rating.coins}</span></div>` : g.online && !g.multi ? '' : g.solo > 0 ? `<div class="rating"><span>${g.multi ? 'Match à plusieurs' : 'Entraînement'}</span><b style="font-size:1rem">Pièces gagnées</b><span class="coins" style="margin-left:auto">+${g.solo}</span></div><p class="hint">${g.multi ? 'Les matchs à plusieurs rapportent des pièces mais ne comptent pas au classement.' : 'Contre l\'ordi : moins de pièces qu\'en ligne, et le classement ne bouge pas.'}</p>` : g.solo === -1 ? '<p class="hint">Match trop court pour gagner des pièces. Contre l\'ordi, les pièces arrivent après un vrai match.</p>' : '<p class="hint">Les matchs d\'entraînement ne comptent pas au classement.</p>';
   if (sum.players) {
     const P = sum.players.map(p => ({ ...p, n: noteOf(p, sc) }));
     const mvp = P.slice().sort((a, b) => b.n - a.n)[0], mc = mvp.gk ? '#2dd4a0' : M.kit[mvp.t].c1;
@@ -913,7 +1039,7 @@ function renderEnd(g, sum, rating) {
   } else { $('#endMvp').innerHTML = ''; $('#endStats').hidden = true; $('#endLineups').innerHTML = ''; }
   const acts = $('#endActions'); acts.innerHTML = '';
   const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = txt; b.onclick = fn; acts.appendChild(b); return b; };
-  if (g.online && ROOM && !sum.forfeit) mk('Revanche', 'primary', () => { renderLobby(); show('lobby'); });
+  if (g.online && ROOM && !sum.forfeit) mk(g.multi ? 'Retour à la salle' : 'Revanche', 'primary', () => { if (LOB?.multi) { renderTLobby(); show('tlobby'); } else { renderLobby(); show('lobby'); } });
   if (!g.online) mk('Rejouer', 'primary', () => startSolo());
   if (g.online) mk('Ouvrir des packs', '', async () => { if (ROOM) { const r = ROOM; ROOM = null; LOB = null; await r.leave(); } await loadCollection(); openShop(); });
   mk('Retour à l\'accueil', '', async () => { if (ROOM) await leaveRoom(); else { ME = await loadProfile() || ME; renderHome(); show('home'); } });

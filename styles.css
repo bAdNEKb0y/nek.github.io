@@ -682,3 +682,51 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 @media (max-width:520px){.adtabs{grid-auto-flow:row;grid-template-columns:repeat(2,1fr);grid-auto-columns:auto}}
 .adbox .hint{margin:6px 0;position:static}
 .ad-list{margin-top:4px}
+
+/* ---------- Page admin séparée ---------- */
+body.adminpage{overflow:auto;min-height:100%}
+.adminpage #app{position:static;min-height:100vh;height:auto;overflow:visible}
+.ad-login{min-height:100vh;display:grid;place-items:center;padding:20px}
+.ad-login .authcard{width:min(420px,100%)}
+.ad-h1{font-size:44px;line-height:.95;margin:0 0 6px}
+.ad-h1 span{color:var(--flood)}
+.ad-page{max-width:980px;margin:0 auto;padding:0 max(14px,env(safe-area-inset-right)) calc(30px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.ad-top{position:sticky;top:0;z-index:5;background:var(--night);display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:max(10px,env(safe-area-inset-top)) 0 8px;border-bottom:1px solid var(--line)}
+.ad-top h1{margin:0;font-size:clamp(22px,6vw,32px);line-height:1;white-space:nowrap}
+.ad-top h1 span{color:var(--flood)}
+.ad-top .ad-live{margin:0}
+.ad-live.off{color:var(--muted);animation:none}
+.ad-me{display:flex;gap:12px;align-items:center;margin-left:auto;font-size:14px;flex-wrap:wrap}
+.ad-me a.link{color:inherit}
+.ad-page .adtabs{position:static;flex:1 1 100%;margin:4px 0 0;max-width:none}
+@media (max-width:520px){.ad-me{margin-left:0;width:100%;justify-content:space-between}}
+.ad-page .hint{margin:6px 0}
+
+/* ---------- Salle à plusieurs ---------- */
+.team-tile{border-color:var(--j2)!important;background:linear-gradient(120deg,rgba(90,209,230,.16),var(--panel))!important}
+.tsides{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:stretch}
+.tsides .vsx{align-self:center;font-family:var(--f-display);font-weight:800;font-size:22px;color:var(--muted)}
+.tside{display:grid;gap:8px;align-content:start;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0}
+.tside.s0{border-top:4px solid var(--flood)}.tside.s1{border-top:4px solid var(--j2)}
+.tsh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.tsh svg{width:34px;height:34px;flex:none}
+.tsh>div{min-width:0;flex:1}
+.tsh small{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.tsh b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tsel{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--chalk);padding:8px;font:inherit;font-size:16px;min-width:0}
+.tplist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.tplist li{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+.tplist li b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.tplist li small{color:var(--muted);font-size:12px;margin-left:auto}
+.tplist li.me b{color:var(--flood)}
+.tplist li.bot small{margin-left:0}
+.tdot{width:9px;height:9px;border-radius:50%;background:#55655d;flex:none}
+.tdot.on{background:var(--win)}
+.tyou{font-size:13px;font-weight:700;color:var(--flood);text-align:center}
+#tFriends .friend{display:flex;align-items:center;gap:8px}
+#tFriends .friend b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.netpill.ok{color:var(--win)}
+@media (max-width:420px){.tsides{grid-template-columns:minmax(0,1fr)}.tsides .vsx{justify-self:center;font-size:16px}}
+
+.admin-tile{border-color:var(--flood)!important}
+.admin-tile .adb{position:static;display:inline-grid;vertical-align:middle;margin-left:6px}

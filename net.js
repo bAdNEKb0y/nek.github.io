@@ -15,15 +15,16 @@ const ICE = [
 ];
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.random() * CODE_CHARS.length | 0]).join('');
-export const cleanCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+export const cleanCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 
 /**
  * Une salle de match à deux. role: 'host' | 'guest'
  * Événements : 'peer' (infos adversaire ou null), 'msg' (type, data), 'link' (état réseau), 'full'
  */
 export class Room {
-  constructor(code, me, role) {
+  constructor(code, me, role, opt = {}) {
     this.code = code; this.me = me; this.role = role;
+    this.max = opt.max || 2; this.prefix = opt.prefix || 'match:'; this.peers = []; // salle à plusieurs : jusqu'à max joueurs, tout passe par le relais
     this.handlers = {}; this.peer = null; this.state = { team: me.fav ?? 0, ready: false };
     this.pc = null; this.fast = null; this.rel = null; this.mode = 'relay';
     this.rtt = 0; this.lastRecv = 0; this.closed = false; this.pendingIce = [];
@@ -32,7 +33,7 @@ export class Room {
   emit(ev, ...a) { (this.handlers[ev] || []).forEach(f => { try { f(...a); } catch (e) { console.error(e); } }); }
 
   async join() {
-    const ch = sb.channel('match:' + this.code, { config: { broadcast: { self: false, ack: false }, presence: { key: this.me.uid } } });
+    const ch = sb.channel(this.prefix + this.code, { config: { broadcast: { self: false, ack: false }, presence: { key: this.me.uid } } });
     this.ch = ch;
     ch.on('presence', { event: 'sync' }, () => this.onPresence());
     ch.on('broadcast', { event: 'sig' }, ({ payload }) => this.onSignal(payload));
@@ -53,6 +54,7 @@ export class Room {
   setState(patch) { Object.assign(this.state, patch); return this.track(); }
 
   onPresence() {
+    if (this.max > 2) return this.onPresenceMulti();
     const all = Object.values(this.ch.presenceState()).map(a => a[0]).filter(Boolean);
     const others = all.filter(p => p.uid !== this.me.uid);
     // Deux personnes maximum : les premiers arrivés gardent la place
@@ -68,6 +70,19 @@ export class Room {
       this.resetRTC();
       if (peer && this.role === 'host') this.startRTC();
     }
+  }
+
+  onPresenceMulti() {
+    const all = Object.values(this.ch.presenceState()).map(a => a[0]).filter(Boolean).sort((a, b) => a.at - b.at || (a.uid < b.uid ? -1 : 1));
+    const seen = new Set(), list = all.filter(p => !seen.has(p.uid) && seen.add(p.uid));
+    const i = list.findIndex(p => p.uid === this.me.uid);
+    if (i >= this.max) { this.emit('full'); return; }
+    const inRoom = list.slice(0, this.max), others = inRoom.filter(p => p.uid !== this.me.uid);
+    this.peers = others;
+    // pour l'invité, « peer » = l'hôte ; pour l'hôte = n'importe quel autre joueur
+    this.peer = this.role === 'guest' ? others.find(p => p.role === 'host') || null : others[0] || null;
+    this.emit('peers', inRoom);
+    this.emit('peer', this.peer);
   }
 
   /* ----- WebRTC ----- */
