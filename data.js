@@ -142,6 +142,7 @@ export const PACKS={
   or:{n:'Pack Or',price:600,count:3,odds:{or:70,rare:25,elite:4.5,leg:.5,goat:.02},txt:'3 cartes. Surtout des joueurs Or.'},
   stars:{n:'Pack Stars',price:2000,count:4,odds:{or:30,rare:48,elite:19,leg:3,goat:.05},txt:'4 cartes dont au moins 1 Rare.'},
   leg:{n:'Pack Légende',price:6000,count:3,odds:{or:0,rare:60,elite:32,leg:8,goat:.1},txt:'3 cartes Rare ou mieux. 35 % de chances d\'une Légende.'},
+  bonus:{n:'Pack Bonus',price:0,count:3,odds:{or:0,rare:55,elite:35,leg:9.5,goat:.5},txt:'Offert tous les 20 packs ouverts (et avec le cadeau du 7e jour). 3 cartes, la 1re au moins Élite.'},
   icon:{n:'Pack Icône',price:15000,count:1,odds:{or:0,rare:0,elite:0,leg:99.5,goat:.5},txt:'1 Légende garantie. Une chance infime d\'avoir Messi ou Ronaldo.'},
 };
 const FILLER=['Remplaçant',0,64];

@@ -10,6 +10,7 @@ import { createRenderer, pickText, SIDE_COL } from './render.js';
 import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList, inviteToRoom, isOnline } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
+import { initRewards, renderRewardTiles, loadAchievements, openDaily, closeDaily, openAch, closeAch, BONUS_EVERY } from './rewards.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -99,8 +100,11 @@ async function afterLogin() {
     createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => joinAny(cleanCode(c)), onMeChange: () => renderMe(),
     reloadCol: async () => { await loadCollection(); renderMe(); }, alone: code => !!ROOM && LOB?.code === code && (LOB.multi ? !ROOM.peers.length : !LOB.peer), leaveIfAlone: code => { if (ROOM && LOB?.code === code && !(LOB.multi ? ROOM.peers.length : LOB.peer) && !GAME) leaveRoom(); },
     playing: () => (!!GAME && !GAME.done) || (!!DUEL && !DUEL.done) || (!!ROOM && !!LOB?.peer) });
+  initRewards({ col: () => COL, toast, sound: () => { audio(); SND.coin(); buzz([40, 30, 40]); }, reload: loadCollection, changed: () => { renderMe(); renderRewardTiles(); if (!$('#shop').hidden) renderShop(); } });
+  renderRewardTiles(); loadAchievements();
   if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
   else if (!tutoSeen()) openTuto();
+  else if (COL?.daily?.ready) setTimeout(() => { if (!$('#home').hidden && $('#pack').hidden && !GAME && !ROOM) openDaily(); }, 900); // cadeau du jour proposé à l'arrivée
   const q = new URLSearchParams(location.search).get('salle');
   if (q) { history.replaceState(null, '', location.pathname); joinAny(cleanCode(q)); }
 }
@@ -119,6 +123,7 @@ function renderMe() {
 }
 async function renderHome() {
   renderMe();
+  renderRewardTiles(); loadAchievements();
   $('#homeErr').textContent = '';
   const [{ data: top }, { data: mine }] = await Promise.all([
     sb.from('profiles').select('id,display,rating,wins,draws,losses,avatar,fav_team,title').order('rating', { ascending: false }).limit(20),
@@ -157,6 +162,10 @@ $('#joinForm').addEventListener('submit', e => {
 });
 /** Code à 4 caractères = salle 1 contre 1, à 5 = salle à plusieurs */
 function joinAny(c) { if (c.length === 5) enterTeamRoom(c, 'guest'); else if (c.length === 4) enterRoom(c, 'guest'); }
+$('#bDaily').addEventListener('click', () => { audio(); openDaily(); });
+$('#bAch').addEventListener('click', () => { audio(); openAch(); });
+$('#daily').addEventListener('click', e => { if (e.target.id === 'daily') closeDaily(); });
+$('#ach').addEventListener('click', e => { if (e.target.id === 'ach') closeAch(); });
 $('#bTeam').addEventListener('click', () => { audio(); enterTeamRoom(newCode() + newCode()[0], 'host'); });
 $('#bSolo').addEventListener('click', () => { audio(); if (!tutoSeen()) openTuto(startSolo); else startSolo(); });
 $('#bTuto').addEventListener('click', () => openTuto());
@@ -307,20 +316,22 @@ const ODD_ORDER = ['or', 'rare', 'elite', 'leg', 'goat'];
 function renderShop() {
   renderCoins();
   const have = new Set(COL.cards), n = COL.cards.length, legs = COL.cards.filter(id => CARDS[id]?.tier === 'leg').length, ult = COL.cards.filter(id => CARDS[id]?.tier === 'goat').length;
-  $('#prog').innerHTML = `<div class="pg-top"><span><b>${n}</b> / ${CARD_LIST.length} cartes</span><span><b>${legs}</b> / 18 légendes</span><span><b>${ult}</b> / 2 ultimes</span><span><b>${COL.packs}</b> packs ouverts</span></div><div class="pg-bar"><i style="width:${Math.round(n / CARD_LIST.length * 100)}%"></i></div>`;
+  $('#prog').innerHTML = `<div class="pg-top"><span><b>${n}</b> / ${CARD_LIST.length} cartes</span><span><b>${legs}</b> / ${CARD_LIST.filter(c => c.tier === 'leg').length} légendes</span><span><b>${ult}</b> / ${CARD_LIST.filter(c => c.tier === 'goat').length} ultimes</span><span><b>${COL.packs}</b> packs ouverts</span></div><div class="pg-bar"><i style="width:${Math.round(n / CARD_LIST.length * 100)}%"></i></div>
+    <div class="bonusbar"><span>🎁 Pack bonus : <b>${COL.packs % BONUS_EVERY}</b> / ${BONUS_EVERY} packs ouverts</span><div class="pg-bar"><i style="width:${Math.round(COL.packs % BONUS_EVERY / BONUS_EVERY * 100)}%"></i></div></div>`;
   document.querySelectorAll('#shopTabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === SHOP_TAB));
   const body = $('#shopBody');
   if (SHOP_TAB === 'packs') {
-    body.innerHTML = `<div class="packs">${['free', 'or', 'stars', 'leg', 'icon'].map(k => {
+    body.innerHTML = `<div class="packs">${[...(COL.bonus > 0 ? ['bonus'] : []), 'free', 'or', 'stars', 'leg', 'icon'].map(k => {
       const P = PACKS[k], odds = ODD_ORDER.filter(t => P.odds[t] > 0).map(t => `<span class="od od-${t}">${TIER_NAME[t]} ${String(P.odds[t]).replace('.', ',')} %</span>`).join('');
       let btn;
       if (n >= CARD_LIST.length) btn = '<button class="buy" disabled>Collection complète</button>';
+      else if (k === 'bonus') btn = `<button class="buy go" data-pack="bonus">Ouvrir (${COL.bonus} offert${COL.bonus > 1 ? 's' : ''})</button>`;
       else if (k === 'free') btn = freeReady() ? '<button class="buy go" data-pack="free">Ouvrir gratuitement</button>' : `<button class="buy" disabled id="freeBtn">Dans ${freeLeft()}</button>`;
       else btn = `<button class="buy" data-pack="${k}" ${COL.coins < P.price ? 'disabled' : ''}><span class="coins">${P.price.toLocaleString('fr-FR')}</span></button>`;
-      return `<div class="pshop"><div class="pk-pack p-${k}"><small>Pack</small><b>${esc(P.n.replace('Pack ', ''))}</b><span>${P.count} carte${P.count > 1 ? 's' : ''}</span></div>
+      return `<div class="pshop${k === 'bonus' ? ' pbonus' : ''}"><div class="pk-pack p-${k}"><small>Pack</small><b>${esc(P.n.replace('Pack ', ''))}</b><span>${P.count} carte${P.count > 1 ? 's' : ''}</span></div>
         <div style="min-width:0"><h3>${esc(P.n)}</h3><p>${esc(P.txt)}</p><div class="odds">${odds}</div>${btn}</div></div>`;
     }).join('')}</div>
-    <p class="hint">Jamais de doublon : un pack ne te donne que des cartes que tu n'as pas encore. Tu gagnes des pièces à chaque match en ligne : victoire 500, nul 250, défaite 120, plus 60 par but.</p>`;
+    <p class="hint">Jamais de doublon : un pack ne te donne que des cartes que tu n'as pas encore. Tu gagnes des pièces à chaque match en ligne : victoire 500, nul 250, défaite 120, plus 60 par but. Tous les ${BONUS_EVERY} packs ouverts, un pack bonus est offert.</p>`;
     body.querySelectorAll('[data-pack]').forEach(b => b.onclick = () => buyPack(b.dataset.pack));
   } else {
     const list = CARD_LIST.filter(c => FILTER === 'all' || (FILTER === 'miss' ? !have.has(c.id) : FILTER === 'mine' ? have.has(c.id) : c.tier === FILTER))
@@ -337,10 +348,14 @@ async function buyPack(type) {
   const { data, error } = await sb.rpc('open_pack', { p_type: type });
   BUSY = false;
   if (error) { const k = Object.keys(PACK_ERR).find(k => (error.message || '').includes(k)); toast(PACK_ERR[k] || 'Ouverture impossible. Vérifie ta connexion.'); await loadCollection(); renderShop(); return; }
-  COL.cards = COL.cards.concat(data.cards); COL.coins = data.coins; COL.packs++;
+  COL.cards = COL.cards.concat(data.cards); COL.coins = data.coins; COL.packs = data.packs ?? COL.packs + 1; if (data.bonus != null) COL.bonus = data.bonus;
   if (type === 'free') COL.last_free = new Date(Date.now() + clockOffset).toISOString();
   renderShop();
-  showPack(type, data.cards, a => { if (a === 'team') openClub(); else renderShop(); });
+  showPack(type, data.cards, a => {
+    if (data.earned) { toast(`🎁 ${COL.packs} packs ouverts : un PACK BONUS t'est offert !`); SND.coin(); buzz([40, 30, 40]); }
+    loadAchievements();
+    if (a === 'team') openClub(); else renderShop();
+  });
 }
 setInterval(() => {
   const b = $('#freeBtn'); if (b && !$('#shop').hidden) { if (freeReady()) renderShop(); else b.textContent = `Dans ${freeLeft()}`; }
@@ -764,6 +779,8 @@ function closeTop() {
   if (!$('#chat').hidden) { closeChat(); return true; }
   if (!$('#profile').hidden) { closeProfile(); return true; }
   if (!$('#settings').hidden) { closeSettings(); return true; }
+  if (!$('#ach').hidden) { closeAch(); return true; }
+  if (!$('#daily').hidden) { closeDaily(); return true; }
   if (!$('#menu').hidden) { $('#menu').hidden = true; return true; }
   for (const id of ['tuto', 'pack', 'picker']) {
     const o = $('#' + id); if (o.hidden) continue;
