@@ -101,7 +101,7 @@ function visible(el) {
 }
 function scope() {
   // un calque ouvert (pack, sélection de joueur, tuto, menu) a la priorité
-  for (const id of ['chat', 'profile', 'settings', 'tuto', 'pack', 'picker', 'menu']) { const o = document.getElementById(id); if (o && !o.hidden) return o; }
+  for (const id of ['trade', 'chat', 'profile', 'settings', 'tuto', 'pack', 'picker', 'menu']) { const o = document.getElementById(id); if (o && !o.hidden) return o; }
   return document.querySelector('.screen:not([hidden])') || document.body;
 }
 function items() { return [...scope().querySelectorAll(SEL)].filter(visible); }

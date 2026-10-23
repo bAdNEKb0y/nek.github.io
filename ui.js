@@ -120,7 +120,7 @@ export function cardHTML(c, opt = {}) {
   if (!c) return '';
   const t = c.tier;
   return `<div class="fc t-${t}${opt.small ? ' sm' : ''}"><div class="r">${c.r}</div><div class="ps">${c.pos}</div><div class="tl">${TIER_NAME[t]}</div>
-    <div class="face">${faceSVG(c)}</div><div class="n${c.name.length > 13 ? ' xl' : c.name.length > 9 ? ' l' : ''}">${esc(c.name)}</div><div class="c">${esc(c.club)} · ${c.num}</div></div>`;
+    <div class="face">${faceSVG(c)}</div><div class="n${c.name.length > 12 ? ' xl' : c.name.length > 8 ? ' l' : ''}">${esc(c.name)}</div><div class="c">${esc(c.club)} · ${c.num}</div></div>`;
 }
 export function lockedHTML(c) {
   return `<div class="fc lock"><div class="r">?</div><div class="ps">${c.pos}</div><div class="sh" style="opacity:.25">${shirtSVG(c.kit)}</div><div class="n">???</div><div class="c">${c.goat ? 'Ultime' : c.leg ? 'Légende' : esc(c.club)}</div></div>`;

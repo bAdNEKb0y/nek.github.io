@@ -550,3 +550,22 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .faddf .btn{flex:none}
 .card{grid-template-columns:minmax(0,1fr)}
 .faddf input{width:0}
+/* Échanges */
+.trades{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.trow{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:8px}
+.tinfo{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.tst{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--panel2);color:var(--muted)}
+.tst.pending{background:rgba(255,201,74,.16);color:var(--flood)}.tst.accepted{background:rgba(127,217,154,.16);color:var(--win)}
+.tswap,.tsum{display:flex;align-items:center;justify-content:center;gap:12px}
+.tlab{display:flex;justify-content:center;gap:52px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tcard{width:96px}.tcard .fc{width:100%}
+.tcard.empty{aspect-ratio:3/4.15;border:2px dashed var(--line);border-radius:12px;display:grid;place-items:center;text-align:center;color:var(--muted);font-size:13px}
+.tcard.gone{aspect-ratio:3/4.15;border-radius:12px;background:var(--panel2);display:grid;place-items:center}
+.tarrow{font-size:28px;color:var(--flood)}
+.tsum{padding:14px 0 6px}.tsum>div{display:grid;justify-items:center;gap:4px}.tsum small{color:var(--muted);font-size:12px}
+.tacts{display:flex;gap:8px;justify-content:center}
+.twarn{margin:0 0 8px;padding:8px 10px;border-radius:10px;background:rgba(240,119,107,.12);color:#ffb3aa;font-size:13px}
+.tgrid{max-height:340px}
+#bTrades{position:relative;font-size:13px;padding:6px 10px}
+#bTrades .badge{position:absolute;top:-7px;right:-7px;margin:0}
+.cardhead #friendsCount{margin-left:auto}

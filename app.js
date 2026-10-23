@@ -7,7 +7,7 @@ import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundO
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
 import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL } from './render.js';
-import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, kitOf } from './social.js';
+import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf } from './social.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -87,7 +87,8 @@ async function afterLogin() {
   await loadCollection();
   renderHome(); show('home');
   initSocial({ me: () => ME, col: () => COL, toast, busy: () => !!GAME || !!ROOM, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); }, inMatch: () => !!GAME && !GAME.done,
-    createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => enterRoom(cleanCode(c), 'guest'), onMeChange: () => renderMe() });
+    createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => enterRoom(cleanCode(c), 'guest'), onMeChange: () => renderMe(),
+    reloadCol: async () => { await loadCollection(); renderMe(); } });
   if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
   else if (!tutoSeen()) openTuto();
   const q = new URLSearchParams(location.search).get('salle');
@@ -150,6 +151,8 @@ $('#meCard').addEventListener('click', () => ME && openProfile(ME.id));
 $('#friendAdd').addEventListener('submit', async e => { e.preventDefault(); const i = $('#friendName'), v = i.value.trim(); if (v.length < 3) { toast('Écris le pseudo de ton ami (3 lettres minimum).'); return; } if (await addFriend(v)) i.value = ''; });
 $('#profile').addEventListener('click', e => { if (e.target.id === 'profile') closeProfile(); });
 $('#chat').addEventListener('click', e => { if (e.target.id === 'chat') closeChat(); });
+$('#trade').addEventListener('click', e => { if (e.target.id === 'trade') closeTrade(); });
+$('#bTrades').addEventListener('click', openTrades);
 
 /* ---------- Paramètres ---------- */
 onSetting(k => { if (['saver', 'cam', 'btn', 'lefty'].includes(k) && GAME) R.resize(); });
@@ -596,6 +599,7 @@ addEventListener('keyup', e => {
 function bPress() { if (LI.bDown) return; LI.bDown = true; LI.b++; }
 function bRelease() { if (!LI.bDown) return; localKick(1.3); LI.bDown = false; LI.relCharge = GAME?.localCharge || 0; LI.rel++; }
 function closeTop() {
+  if (!$('#trade').hidden) { closeTrade(); return true; }
   if (!$('#chat').hidden) { closeChat(); return true; }
   if (!$('#profile').hidden) { closeProfile(); return true; }
   if (!$('#settings').hidden) { closeSettings(); return true; }

@@ -1,12 +1,12 @@
 /* Profils, amis, joueurs en ligne et défis entre amis */
 import { sb } from './net.js';
-import { TEAMS, KITS, CARDS, CARD_LIST } from './data.js';
+import { TEAMS, KITS, CARDS, CARD_LIST, TRANK, TIER_NAME } from './data.js';
 import { $, esc, shirtSVG, cardHTML } from './ui.js';
 
 let H = null, ME = null, CH = null;
 export const TITLES = ['Buteur né', 'Le Mur', 'Roi du dribble', 'Maître des packs', 'Chasseur de légendes', 'Capitaine', 'Pro de la retournée', 'Tacleur fou', 'Passeur de génie', 'Futur Ballon d\'Or', 'Supporter n°1', 'Débutant motivé'];
 const ONLINE = new Map(); // uid -> {name, busy}
-let FRIENDS = [], UNREAD = {}, CHAT = null;
+let FRIENDS = [], UNREAD = {}, CHAT = null, TRADES = [];
 /** Messages rapides (pas de texte libre : pas d'insultes ni d'inconnus qui écrivent n'importe quoi) */
 export const MSGS = ['Salut ! 👋', 'On joue ? ⚽', 'GG ! 👏', 'Revanche ? 😤', 'Bien joué !', 'Trop fort 🔥', 'J\'arrive !', 'Pas maintenant, plus tard',
   'T\'as eu quoi dans tes packs ?', 'J\'ai eu une légende !! 🤩', 'Merci !', 'Bonne nuit 😴', '😂', '👍', '⚽🔥', 'Viens dans ma salle !'];
@@ -35,6 +35,13 @@ export function initSocial(h) {
   CH.on('broadcast', { event: 'invite' }, ({ payload: p }) => { if (p?.to === ME.id) showInvite(p); });
   CH.on('broadcast', { event: 'invite-no' }, ({ payload: p }) => { if (p?.to === ME.id) H.toast(`${p.name} ne peut pas jouer maintenant.`); });
   CH.on('broadcast', { event: 'msg' }, ({ payload: p }) => { if (p?.to === ME.id) gotMsg(p); });
+  CH.on('broadcast', { event: 'trade' }, async ({ payload: p }) => {
+    if (p?.to !== ME.id) return;
+    await loadTrades();
+    if (p.kind === 'accepted') { await H.reloadCol?.(); notify(`🔄 ${p.name} a accepté ton échange !`, 'La carte est dans ta collection.', openTrades); }
+    else if (p.kind === 'declined') notify(`${p.name} a refusé ton échange`, 'Tu peux proposer autre chose.', openTrades);
+    else notify(`🔄 ${p.name} te propose un échange`, 'Regarde son offre dans Échanges.', openTrades);
+  });
   CH.on('broadcast', { event: 'friend' }, ({ payload: p }) => {
     if (p?.to !== ME.id) return;
     loadFriends();
@@ -50,11 +57,12 @@ export async function loadFriends(first) {
   const [{ data, error }, { data: un }] = await Promise.all([sb.rpc('my_friends'), sb.rpc('unread_msgs')]);
   if (!error && Array.isArray(data)) FRIENDS = data;
   if (un && typeof un === 'object') UNREAD = un;
-  renderFriends();
+  await loadTrades();
   if (first) {
     const n = Object.values(UNREAD).reduce((a, b) => a + b, 0), req = FRIENDS.filter(f => f.status === 'pending' && f.incoming).length;
     if (n) H.toast(`💬 Tu as ${n} nouveau${n > 1 ? 'x' : ''} message${n > 1 ? 's' : ''} de tes amis.`);
     else if (req) H.toast(`👋 ${req} demande${req > 1 ? 's' : ''} d'ami en attente.`);
+    else if (incTrades()) H.toast(`🔄 Tu as ${incTrades()} proposition${incTrades() > 1 ? 's' : ''} d'échange.`);
   }
 }
 export function renderFriends() {
@@ -74,7 +82,8 @@ export function renderFriends() {
   el.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => respond(b.dataset.ref, false));
   el.querySelectorAll('[data-chal]').forEach(b => b.onclick = () => challenge(FRIENDS.find(f => f.id === b.dataset.chal)));
   el.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => openChat(b.dataset.chat));
-  const tot = Object.values(UNREAD).reduce((a, b) => a + b, 0) + inc.length;
+  const tot = Object.values(UNREAD).reduce((a, b) => a + b, 0) + inc.length + incTrades();
+  const tb = $('#tradesBadge'); if (tb) { tb.textContent = incTrades() || ''; tb.hidden = !incTrades(); }
   const hb = $('#friendsBadge'); if (hb) { hb.textContent = tot || ''; hb.hidden = !tot; }
 }
 export async function addFriend(name) {
@@ -134,7 +143,7 @@ function renderProfile() {
   const fr = p.friend, inc = p.incoming;
   let act = '';
   if (mine) act = `<button class="btn" data-x="edit">${EDIT ? 'Terminé' : 'Modifier mon profil'}</button>`;
-  else if (fr === 'accepted') act = `${isOnline(p.id) ? `<button class="btn primary" data-x="chal">Défier</button>` : ''}<button class="btn" data-x="msg">💬 Message</button><button class="btn" data-x="unfriend">Retirer des amis</button>`;
+  else if (fr === 'accepted') act = `${isOnline(p.id) ? `<button class="btn primary" data-x="chal">Défier</button>` : ''}<button class="btn" data-x="msg">💬 Message</button><button class="btn" data-x="trade">🔄 Échanger</button><button class="btn" data-x="unfriend">Retirer des amis</button>`;
   else if (fr === 'pending' && inc) act = `<button class="btn primary" data-x="accept">Accepter en ami</button><button class="btn" data-x="refuse">Refuser</button>`;
   else if (fr === 'pending') act = `<button class="btn" disabled>Demande envoyée</button>`;
   else act = `<button class="btn primary" data-x="add">Ajouter en ami</button>`;
@@ -170,6 +179,7 @@ function renderProfile() {
   on('unfriend', () => respond(p.id, false));
   on('chal', () => challenge({ id: p.id, display: p.display }));
   on('msg', () => { closeProfile(); openChat(p.id); });
+  on('trade', () => { closeProfile(); openTradeWith(p.id, p.display); });
   if (EDIT) {
     el.querySelectorAll('[data-av]').forEach(b => b.onclick = () => saveProfile({ avatar: b.dataset.av }));
     el.querySelectorAll('[data-fc]').forEach(b => b.onclick = () => saveProfile({ fav_card: b.dataset.fc || null }));
@@ -245,4 +255,84 @@ function notify(title, body, onOpen) {
   notT = setTimeout(() => d.remove(), 6000);
   try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') { const n = new Notification(title, { body, icon: 'icon.svg', tag: 'fdp' }); n.onclick = () => { window.focus(); onOpen?.(); n.close(); }; } } catch { }
 }
+
+/* ---------- Échanges de cartes ---------- */
+const incTrades = () => TRADES.filter(t => t.status === 'pending' && !t.mine).length;
+export async function loadTrades() {
+  const { data } = await sb.rpc('my_trades');
+  if (Array.isArray(data)) TRADES = data;
+  renderFriends();
+  if (!$('#trade').hidden && $('#trade').dataset.mode === 'list') renderTrades();
+}
+const tradeErr = e => {
+  const m = String(e?.message || '');
+  return /they_have_it/.test(m) ? 'Ton ami a déjà cette carte.' : /you_have_it/.test(m) ? 'Tu as déjà cette carte.' : /not_owned|they_dont_own|invalid/.test(m) ? 'Une des cartes n\'est plus disponible.'
+    : /too_many/.test(m) ? 'Tu as déjà 10 offres en attente.' : /already/.test(m) ? 'Tu as déjà proposé cet échange.' : /not_friends/.test(m) ? 'Vous devez être amis.' : 'Échange impossible. Réessaie.';
+};
+const mini = (id, extra = '') => { const c = CARDS[id]; return c ? `<div class="tcard ${extra}">${cardHTML(c, { small: true })}</div>` : '<div class="tcard gone">?</div>'; };
+export function openTrades() { const el = $('#trade'); el.hidden = false; el.dataset.mode = 'list'; renderTrades(); loadTrades(); }
+function renderTrades() {
+  const el = $('#trade');
+  const st = { pending: 'En attente', accepted: 'Accepté ✓', declined: 'Refusé', cancelled: 'Annulé', expired: 'Plus possible' };
+  const row = t => `<li class="trow"><div class="tinfo"><b>${t.mine ? `Ta proposition à ${esc(t.name)}` : `${esc(t.name)} te propose`}</b><small class="tst ${t.status}">${st[t.status] || t.status}</small></div>
+    <div class="tswap">${mini(t.mine ? t.give : t.want)}<span class="tarrow">⇄</span>${mini(t.mine ? t.want : t.give)}</div>
+    <div class="tlab"><span>${t.mine ? 'Tu donnes' : 'Tu donnes'}</span><span>Tu reçois</span></div>
+    ${t.status === 'pending' ? (t.mine ? `<div class="tacts"><button class="btn small" data-tc="${t.id}">Annuler</button></div>` : `<div class="tacts"><button class="btn small primary" data-ta="${t.id}">Accepter</button><button class="btn small" data-td="${t.id}">Refuser</button></div>`) : ''}</li>`;
+  const pend = TRADES.filter(t => t.status === 'pending'), old = TRADES.filter(t => t.status !== 'pending');
+  el.innerHTML = `<div class="box setbox"><div class="cardhead"><h2>Échanges</h2><button class="link" data-x="close">Fermer</button></div>
+    <p class="hint" style="padding-top:10px">Pour échanger, ouvre le profil d'un ami et touche « 🔄 Échanger ». Chaque carte part contre une autre, et les deux doivent être d'accord.</p>
+    <section class="setsec"><h3>En cours</h3><ul class="trades">${pend.map(row).join('') || '<li class="muted">Aucun échange en cours.</li>'}</ul></section>
+    ${old.length ? `<section class="setsec"><h3>Derniers jours</h3><ul class="trades">${old.map(row).join('')}</ul></section>` : ''}</div>`;
+  el.querySelector('[data-x=close]').onclick = closeTrade;
+  el.querySelectorAll('[data-ta]').forEach(b => b.onclick = () => respondTrade(+b.dataset.ta, true, b));
+  el.querySelectorAll('[data-td]').forEach(b => b.onclick = () => respondTrade(+b.dataset.td, false, b));
+  el.querySelectorAll('[data-tc]').forEach(b => b.onclick = async () => { b.disabled = true; await sb.rpc('trade_cancel', { p_id: +b.dataset.tc }); loadTrades(); });
+}
+async function respondTrade(id, ok, btn) {
+  btn.disabled = true;
+  const t = TRADES.find(x => x.id === id);
+  const { error } = await sb.rpc('trade_respond', { p_id: id, p_accept: ok });
+  if (error) { H.toast(tradeErr(error)); await loadTrades(); return; }
+  if (t) CH?.send({ type: 'broadcast', event: 'trade', payload: { to: t.other, name: ME.display, kind: ok ? 'accepted' : 'declined' } });
+  if (ok) { await H.reloadCol?.(); H.toast(`Échange réussi ! ${CARDS[t?.give]?.name || 'La carte'} est dans ta collection.`); H.sound?.(); }
+  await loadTrades();
+}
+export function closeTrade() { const el = $('#trade'); el.hidden = true; el.innerHTML = ''; }
+let TW = null;
+async function openTradeWith(id, name) {
+  const el = $('#trade'); el.hidden = false; el.dataset.mode = 'new';
+  el.innerHTML = `<div class="box setbox"><div class="cardhead"><h2>Échange avec ${esc(name)}</h2><button class="link" data-x="close">Fermer</button></div><p class="muted" style="padding:20px 0">Chargement des cartes…</p></div>`;
+  el.querySelector('[data-x=close]').onclick = closeTrade;
+  await H.reloadCol?.();
+  const { data } = await sb.from('collections').select('cards').eq('user_id', id).maybeSingle();
+  const mine = new Set(H.col()?.cards || []), theirs = new Set(data?.cards || []);
+  const by = (a, b) => b.r - a.r || a.name.localeCompare(b.name);
+  TW = { id, name, give: null, want: null,
+    gives: [...mine].filter(c => !theirs.has(c)).map(c => CARDS[c]).filter(Boolean).sort(by),
+    wants: [...theirs].filter(c => !mine.has(c)).map(c => CARDS[c]).filter(Boolean).sort(by) };
+  if (!el.hidden) renderTradeNew();
+}
+function renderTradeNew() {
+  const el = $('#trade'), g = TW.give && CARDS[TW.give], w = TW.want && CARDS[TW.want];
+  const gap = g && w ? TRANK[w.tier] - TRANK[g.tier] : 0;
+  const grid = (list, key) => list.length ? `<div class="pfcs tgrid">${list.map(c => `<button class="pfc" data-${key}="${c.id}" aria-pressed="${TW[key] === c.id}">${cardHTML(c, { small: true })}</button>`).join('')}</div>`
+    : `<p class="muted">${key === 'give' ? 'Tu n\'as aucune carte que ton ami n\'a pas déjà.' : 'Ton ami n\'a aucune carte que tu n\'as pas déjà.'}</p>`;
+  el.innerHTML = `<div class="box setbox"><div class="cardhead"><h2>Échange avec ${esc(TW.name)}</h2><button class="link" data-x="close">Fermer</button></div>
+    <div class="tsum"><div>${g ? mini(g.id) : '<div class="tcard empty">Choisis<br>ta carte</div>'}<small>Tu donnes</small></div><span class="tarrow">⇄</span><div>${w ? mini(w.id) : '<div class="tcard empty">Choisis<br>sa carte</div>'}<small>Tu reçois</small></div></div>
+    ${gap >= 2 ? `<p class="twarn">⚠️ Échange déséquilibré : tu demandes une carte ${TIER_NAME[w.tier]} contre une ${TIER_NAME[g.tier]}. Ton ami risque de refuser.</p>` : gap <= -2 ? `<p class="twarn">⚠️ Attention : tu donnes une carte ${TIER_NAME[g.tier]} contre une ${TIER_NAME[w.tier]}. Tu es sûr ?</p>` : ''}
+    <button class="btn primary" data-x="send" ${g && w ? '' : 'disabled'}>Proposer l'échange</button>
+    <section class="setsec"><h3>1. La carte que tu donnes (${TW.gives.length})</h3>${grid(TW.gives, 'give')}</section>
+    <section class="setsec"><h3>2. La carte que tu veux (${TW.wants.length})</h3>${grid(TW.wants, 'want')}</section></div>`;
+  el.querySelector('[data-x=close]').onclick = closeTrade;
+  el.querySelectorAll('[data-give]').forEach(b => b.onclick = () => { TW.give = b.dataset.give; keepScroll(renderTradeNew); });
+  el.querySelectorAll('[data-want]').forEach(b => b.onclick = () => { TW.want = b.dataset.want; keepScroll(renderTradeNew); });
+  el.querySelector('[data-x=send]').onclick = async e => {
+    e.target.disabled = true;
+    const { error } = await sb.rpc('trade_offer', { p_to: TW.id, p_give: TW.give, p_want: TW.want });
+    if (error) { H.toast(tradeErr(error)); e.target.disabled = false; return; }
+    CH?.send({ type: 'broadcast', event: 'trade', payload: { to: TW.id, name: ME.display, kind: 'offer' } });
+    H.toast(`Proposition envoyée à ${TW.name} !`); await loadTrades(); openTrades();
+  };
+}
+function keepScroll(f) { const b = $('#trade .setbox'), y = b?.scrollTop || 0; f(); const n = $('#trade .setbox'); if (n) n.scrollTop = y; }
 export { kitOf };

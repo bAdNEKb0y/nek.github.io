@@ -68,7 +68,7 @@
       </div>
       <div class="col">
         <div class="card">
-          <div class="cardhead"><h2>Amis <i class="badge" id="friendsBadge" hidden></i></h2><span class="muted fcount" id="friendsCount"></span></div>
+          <div class="cardhead"><h2>Amis <i class="badge" id="friendsBadge" hidden></i></h2><span class="muted fcount" id="friendsCount"></span><button class="btn small" id="bTrades">🔄 Échanges <i class="badge" id="tradesBadge" hidden></i></button></div>
           <form class="faddf" id="friendAdd"><input id="friendName" maxlength="16" placeholder="Pseudo de ton ami" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Pseudo de ton ami"><button class="btn small" type="submit">Ajouter</button></form>
           <ul class="friends" id="friends"><li class="muted">Chargement…</li></ul>
         </div>
@@ -201,6 +201,7 @@
   <div id="settings" class="overlay sheet setov" hidden></div>
   <div id="profile" class="overlay sheet setov profov" hidden></div>
   <div id="chat" class="overlay sheet setov profov" hidden></div>
+  <div id="trade" class="overlay sheet setov profov" hidden></div>
   <div class="toast" id="toast" role="status"></div>
 </div>
 <script type="module" src="app.js"></script>
