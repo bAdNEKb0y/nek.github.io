@@ -699,3 +699,31 @@ h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:24px;text-tra
 .qtabs::-webkit-scrollbar{display:none}
 .qtab{flex:none;padding:6px 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
 .qtab[aria-selected="true"]{background:var(--chalk);color:var(--night);border-color:var(--chalk)}
+/* Constructeur de phrase à trous */
+.pbuild{display:grid;gap:8px;padding-top:8px;min-width:0}
+.pslots{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.pslots::-webkit-scrollbar{display:none}
+.pslot{flex:none;display:grid;gap:2px;justify-items:center;min-width:74px;padding:6px 10px;border-radius:10px;border:1px dashed var(--muted);background:var(--panel)}
+.pslot small{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.pslot b{font-size:14px;white-space:nowrap;color:var(--muted)}
+.pslot.full{border-style:solid;border-color:var(--line)}
+.pslot.full b{color:var(--chalk)}
+.pslot.on{border:2px solid var(--flood);background:rgba(255,201,74,.1)}
+.pslot.on small{color:var(--flood)}
+.pprev{font-size:15px;font-weight:700;min-height:22px;overflow-wrap:anywhere}
+.pacts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pacts [data-pb=send]{margin-left:auto}
+.phint{margin:0;font-size:12px;color:var(--muted)}
+.pwords .chip.sel{background:var(--flood);color:var(--night);border-color:var(--flood)}
+.qtab.qphr{border-color:var(--flood);color:var(--flood)}
+.qtab.qphr[aria-selected="true"]{background:var(--flood);color:var(--night)}
+#chat .pwords{max-height:min(26vh,190px)}
+@media (max-height:500px){#chat .pbuild .pwords{max-height:22vh}.pprev{font-size:13px}}
+@media (max-height:760px){#chat .chatbox>.hint{display:none}#chat .pwords{max-height:15vh}.pprev{font-size:14px}}
+@media (max-height:500px){
+  .pbuild{gap:5px;padding-top:5px}
+  .pslot{min-width:56px;padding:3px 8px}.pslot small{font-size:9px}.pslot b{font-size:12px}
+  .pprev{display:none}
+  .pacts .btn.small{padding:5px 10px;font-size:13px}
+  #chat .qwrap{padding-top:4px}
+}

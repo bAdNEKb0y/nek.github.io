@@ -4,6 +4,7 @@ import { TEAMS, KITS, CARDS, CARD_LIST, TRANK, TIER_NAME } from './data.js';
 import { $, esc, shirtSVG, cardHTML } from './ui.js';
 import { openReplay, encode } from './replay.js';
 import { sendPush, enablePush } from './push.js';
+import { WORDS, WGROUPS, EMOJIS, EMO, sentence } from './chatdata.js';
 
 let H = null, ME = null, CH = null;
 export const TITLES = ['Buteur né', 'Le Mur', 'Roi du dribble', 'Maître des packs', 'Chasseur de légendes', 'Capitaine', 'Pro de la retournée', 'Tacleur fou', 'Passeur de génie', 'Futur Ballon d\'Or', 'Supporter n°1', 'Débutant motivé'];
@@ -247,7 +248,7 @@ function renderChat(loading) {
       const day = new Date(m.created_at).toDateString(), prev = i ? new Date(a[i - 1].created_at).toDateString() : '';
       const sep = day !== prev ? `<div class="msep">${new Date(m.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>` : '';
       const lastMine = m.mine && !a.slice(i + 1).some(x => x.mine);
-      const body = m.msg === 31 ? (m.replay ? `<button class="rpmsg" data-rp="${m.replay}">🎬 <b>Replay</b><small>${esc(m.replay_title || 'Match')}</small><em>▶ Voir</em></button>` : '<span class="muted">🎬 Replay supprimé</span>') : `<span>${esc(MSGS[m.msg] ?? '…')}</span>`;
+      const body = m.msg === 30 ? `<span>${esc(sentence(m.parts))}</span>` : m.msg === 31 ? (m.replay ? `<button class="rpmsg" data-rp="${m.replay}">🎬 <b>Replay</b><small>${esc(m.replay_title || 'Match')}</small><em>▶ Voir</em></button>` : '<span class="muted">🎬 Replay supprimé</span>') : `<span>${esc(MSGS[m.msg] ?? '…')}</span>`;
       return `${sep}<div class="bub ${m.mine ? 'me' : ''} ${m.msg === 31 ? 'rp' : ''}">${body}<time>${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${lastMine && m.read ? ' · Vu ✓✓' : ''}</time></div>`;
     }).join('') : '<p class="muted">Pas encore de message. Dis-lui bonjour !</p>'}</div>
     <div class="qwrap">${quickHTML()}</div>
@@ -263,20 +264,59 @@ function renderChat(loading) {
 /* Messages rapides rangés par onglets (Récents, Salut, Match, Cartes, Émojis) */
 function quickHTML() {
   const rec = lsGet(QR, []).filter(i => MSGS[i]);
-  const tabs = [...(rec.length ? [{ id: 'rec', n: '⭐ Récents', m: rec }] : []), ...MSG_CATS];
-  let cur = lsGet(QK, rec.length ? 'rec' : 'salut'); if (!tabs.some(t => t.id === cur)) cur = tabs[0].id;
+  const tabs = [{ id: 'phrase', n: '✏️ Phrase' }, ...(rec.length ? [{ id: 'rec', n: '⭐ Récents', m: rec }] : []), ...MSG_CATS];
+  let cur = lsGet(QK, rec.length ? 'rec' : 'salut'); if (!tabs.some(t => t.id === cur)) cur = tabs[1].id;
   const tab = tabs.find(t => t.id === cur);
-  return `<div class="qtabs" role="tablist">${tabs.map(t => `<button role="tab" class="qtab" data-qt="${t.id}" aria-selected="${t.id === cur}">${esc(t.n)}</button>`).join('')}</div>
+  const head = `<div class="qtabs" role="tablist">${tabs.map(t => `<button role="tab" class="qtab${t.id === 'phrase' ? ' qphr' : ''}" data-qt="${t.id}" aria-selected="${t.id === cur}">${esc(t.n)}</button>`).join('')}</div>`;
+  if (cur === 'phrase') return head + builderHTML();
+  return `${head}
     <div class="qmsgs">${tab.m.map(i => `<button class="chip" data-m="${i}">${esc(MSGS[i])}</button>`).join('')}<button class="chip rpchip" data-x="rpsend">🎬 Envoyer un replay</button></div>`;
+}
+/* Constructeur de phrase « à trous » : …… …… …… ; on touche un trou et on choisit un mot parmi plusieurs */
+const SLOTS = [
+  { id: 'mots', n: 'Début' }, { id: 'qui', n: 'Qui' }, { id: 'action', n: 'Fait quoi' }, { id: 'quoi', n: 'Quoi' },
+  { id: 'quand', n: 'Quand / où' }, { id: 'ponct', n: 'Fin' }, { id: 'emo', n: 'Émoji' },
+].map(x => ({ ...x, w: x.id === 'emo' ? EMOJIS.map((_, i) => EMO + i) : WGROUPS.find(g => g.id === x.id).w }));
+const PB = { sl: SLOTS.map(() => null), cur: 1 };
+const label = x => x >= EMO ? EMOJIS[x - EMO] : WORDS[x];
+const pbParts = () => PB.sl.filter(x => x != null);
+function builderHTML() {
+  const cur = SLOTS[PB.cur], n = pbParts().length, prev = sentence(pbParts());
+  return `<div class="pbuild">
+    <div class="pslots">${SLOTS.map((x, i) => `<button class="pslot${PB.sl[i] != null ? ' full' : ''}${i === PB.cur ? ' on' : ''}" data-ps="${i}" aria-label="${esc(x.n)}"><small>${esc(x.n)}</small><b>${PB.sl[i] != null ? esc(label(PB.sl[i])) : '……'}</b></button>`).join('')}</div>
+    <div class="pprev">${n ? `« ${esc(prev)} »` : '<span class="muted">Touche un trou puis choisis un mot. Tous les trous sont facultatifs.</span>'}</div>
+    <div class="pacts"><button class="btn small" data-pb="clear" ${n ? '' : 'disabled'}>Effacer</button>${PB.sl[PB.cur] != null ? `<button class="btn small" data-pb="hole">Vider « ${esc(cur.n)} »</button>` : ''}
+      <button class="btn small primary" data-pb="send" ${n ? '' : 'disabled'}>Envoyer ➤</button></div>
+    <div class="qmsgs pwords">${cur.w.map(x => `<button class="chip${PB.sl[PB.cur] === x ? ' sel' : ''}" data-pw="${x}">${esc(label(x))}</button>`).join('')}</div></div>`;
+}
+async function sendSentence(to) {
+  const parts = pbParts(); if (!parts.length) return;
+  const { data, error } = await sb.rpc('send_sentence', { p_to: to, p_parts: parts });
+  if (error) { H.toast(/too_fast/.test(error.message) ? 'Doucement ! Attends un peu avant de renvoyer un message.' : /not_friends/.test(error.message) ? 'Vous n\'êtes plus amis.' : 'Message non envoyé. Réessaie.'); return; }
+  PB.sl = SLOTS.map(() => null); PB.cur = 1;
+  CH?.send({ type: 'broadcast', event: 'msg', payload: { to, from: ME.id, name: ME.display, m: 30, parts, id: data.id } });
+  if (!isOnline(to)) sendPush({ kind: 'msg', id: data.id });
+  if (CHAT && CHAT.id === to) { CHAT.list.push({ id: data.id, mine: true, msg: 30, parts, created_at: data.at || new Date().toISOString() }); renderChat(); }
 }
 function bindQuick(f) {
   const w = $('#chat .qwrap'); if (!w) return;
+  const re = () => { w.innerHTML = quickHTML(); bindQuick(f); };
+  w.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => {
+    PB.sl[PB.cur] = +b.dataset.pw;
+    const nx = SLOTS.findIndex((_, i) => i > PB.cur && PB.sl[i] == null); if (nx >= 0) PB.cur = nx; // on passe au trou suivant
+    re();
+  });
+  w.querySelectorAll('[data-ps]').forEach(b => b.onclick = () => { PB.cur = +b.dataset.ps; re(); });
+  const act = k => w.querySelector(`[data-pb=${k}]`);
+  if (act('hole')) act('hole').onclick = () => { PB.sl[PB.cur] = null; re(); };
+  if (act('clear')) act('clear').onclick = () => { PB.sl = SLOTS.map(() => null); PB.cur = 1; re(); };
+  if (act('send')) act('send').onclick = e => { e.currentTarget.disabled = true; sendSentence(f.id); };
   w.querySelectorAll('[data-qt]').forEach(b => b.onclick = () => { lsSet(QK, b.dataset.qt); w.innerHTML = quickHTML(); bindQuick(f); });
   w.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
     const m = +b.dataset.m; lsSet(QR, [m, ...lsGet(QR, []).filter(x => x !== m)].slice(0, 10));
     sendMsg(f.id, m);
   });
-  w.querySelector('[data-x=rpsend]').onclick = () => pickReplay(f);
+  const rs = w.querySelector('[data-x=rpsend]'); if (rs) rs.onclick = () => pickReplay(f);
 }
 async function pickReplay(f) {
   const list = await listReplays(ME.id);
@@ -305,12 +345,12 @@ async function sendMsg(to, m) {
 function gotMsg(p) {
   if (!friendOf(p.from)) { loadFriends(); }
   if (CHAT && CHAT.id === p.from) {
-    CHAT.list.push({ id: p.id, mine: false, msg: p.m, replay: p.replay, replay_title: p.title, created_at: new Date().toISOString() }); renderChat();
+    CHAT.list.push({ id: p.id, mine: false, msg: p.m, parts: p.parts, replay: p.replay, replay_title: p.title, created_at: new Date().toISOString() }); renderChat();
     sb.rpc('my_msgs', { p_with: p.from }); // marque comme lu
     H.sound?.(true); return;
   }
   UNREAD[p.from] = (UNREAD[p.from] || 0) + 1; renderFriends();
-  notify(`💬 ${p.name}`, p.m === 31 ? `🎬 t'a envoyé un replay : ${p.title || ''}` : MSGS[p.m] ?? '', () => openChat(p.from));
+  notify(`💬 ${p.name}`, p.m === 31 ? `🎬 t'a envoyé un replay : ${p.title || ''}` : p.m === 30 ? sentence(p.parts) : MSGS[p.m] ?? '', () => openChat(p.from));
 }
 /** Notification dans le jeu (+ notification du téléphone si l'appli est en arrière-plan et que c'est autorisé) */
 let notT = null;
