@@ -10,7 +10,6 @@ import { createRenderer, pickText, SIDE_COL } from './render.js';
 import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList, inviteToRoom, isOnline } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
-import { initBank, stopBank, renderCoinShop, refreshCoinShop, openAdmin, closeAdmin } from './bank.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -100,14 +99,12 @@ async function afterLogin() {
     createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => joinAny(cleanCode(c)), onMeChange: () => renderMe(),
     reloadCol: async () => { await loadCollection(); renderMe(); }, alone: code => !!ROOM && LOB?.code === code && (LOB.multi ? !ROOM.peers.length : !LOB.peer), leaveIfAlone: code => { if (ROOM && LOB?.code === code && !(LOB.multi ? ROOM.peers.length : LOB.peer) && !GAME) leaveRoom(); },
     playing: () => (!!GAME && !GAME.done) || (!!DUEL && !DUEL.done) || (!!ROOM && !!LOB?.peer) });
-  initBank({ me: () => ME, toast, sound: soft => { audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); },
-    reloadCol: async () => { await loadCollection(); renderMe(); if (!$('#shop').hidden) renderShop(); }, openShop: () => { if (!GAME) { SHOP_TAB = 'packs'; openShop(); } } });
   if (COL?.welcome?.length) showPack('welcome', COL.welcome, a => { if (!tutoSeen()) openTuto(() => { if (a === 'team') openClub(); }); else if (a === 'team') openClub(); }, 'Pack de bienvenue');
   else if (!tutoSeen()) openTuto();
   const q = new URLSearchParams(location.search).get('salle');
   if (q) { history.replaceState(null, '', location.pathname); joinAny(cleanCode(q)); }
 }
-$('#bLogout').addEventListener('click', async () => { stopSocial(); stopBank(); closeAdmin(); await sb.auth.signOut(); ME = null; show('auth'); });
+$('#bLogout').addEventListener('click', async () => { stopSocial(); await sb.auth.signOut(); ME = null; show('auth'); });
 
 /* ---------- Accueil ---------- */
 function renderMe() {
@@ -313,7 +310,6 @@ function renderShop() {
   $('#prog').innerHTML = `<div class="pg-top"><span><b>${n}</b> / ${CARD_LIST.length} cartes</span><span><b>${legs}</b> / 18 légendes</span><span><b>${ult}</b> / 2 ultimes</span><span><b>${COL.packs}</b> packs ouverts</span></div><div class="pg-bar"><i style="width:${Math.round(n / CARD_LIST.length * 100)}%"></i></div>`;
   document.querySelectorAll('#shopTabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === SHOP_TAB));
   const body = $('#shopBody');
-  if (SHOP_TAB === 'coins') { renderCoinShop(body); refreshCoinShop(); return; }
   if (SHOP_TAB === 'packs') {
     body.innerHTML = `<div class="packs">${['free', 'or', 'stars', 'leg', 'icon'].map(k => {
       const P = PACKS[k], odds = ODD_ORDER.filter(t => P.odds[t] > 0).map(t => `<span class="od od-${t}">${TIER_NAME[t]} ${String(P.odds[t]).replace('.', ',')} %</span>`).join('');
@@ -491,7 +487,7 @@ navigator.serviceWorker?.addEventListener('message', e => {
   if (salle.length >= 4) {
     if ((GAME && !GAME.done) || (DUEL && !DUEL.done)) { toast('Termine ton match d\'abord.'); return; }
     if (LOB?.code !== salle) joinAny(salle);
-  } else if (u.searchParams.get('admin') && ME.is_admin) openAdmin();
+  }
 });
 $('#roomCode').addEventListener('click', async () => {
   const url = `${location.origin}${location.pathname}?salle=${LOB.code}`;
