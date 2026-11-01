@@ -144,7 +144,7 @@ async function renderHome() {
   renderRewardTiles(); loadAchievements();
   $('#homeErr').textContent = '';
   const [{ data: top }, { data: mine }] = await Promise.all([
-    sb.from('profiles').select('id,display,rating,wins,draws,losses,avatar,fav_team,title').order('rating', { ascending: false }).order('wins', { ascending: false }).limit(1001),
+    sb.from('profiles').select('id,display,rating,wins,draws,losses,avatar,fav_team,title').eq('hidden', false).order('rating', { ascending: false }).order('wins', { ascending: false }).limit(1001),
     sb.from('matches').select('home,away,home_team,away_team,home_score,away_score,created_at,hp:profiles!matches_home_fkey(display),ap:profiles!matches_away_fkey(display)')
       .or(`home.eq.${ME.id},away.eq.${ME.id}`).order('created_at', { ascending: false }).limit(8),
   ]);
