@@ -1,4 +1,4 @@
-import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, customTeam } from './data.js';
+import { TEAMS, KIT, POS, CARDS, CARD_LIST, KITS, PACKS, TIER_NAME, TRANK, customTeam, SECRETS } from './data.js';
 import { predictOwn } from './predict.js';
 import { openTuto, tutoSeen } from './tuto.js';
 import { PAD, initPad, pollPad, rumble, padLabels } from './gamepad.js';
@@ -400,7 +400,7 @@ function openShop() { renderShop(); show('shop'); }
 const ODD_ORDER = ['or', 'rare', 'elite', 'leg', 'goat'];
 function renderShop() {
   renderCoins();
-  const have = new Set(COL.cards), n = COL.cards.length, legs = COL.cards.filter(id => CARDS[id]?.tier === 'leg').length, ult = COL.cards.filter(id => CARDS[id]?.tier === 'goat').length;
+  const have = new Set(COL.cards), n = COL.cards.filter(id => !CARDS[id]?.secret).length, legs = COL.cards.filter(id => CARDS[id]?.tier === 'leg').length, ult = COL.cards.filter(id => CARDS[id]?.tier === 'goat').length;
   $('#prog').innerHTML = `<div class="pg-top"><span><b>${n}</b> / ${CARD_LIST.length} cartes</span><span><b>${legs}</b> / ${CARD_LIST.filter(c => c.tier === 'leg').length} légendes</span><span><b>${ult}</b> / ${CARD_LIST.filter(c => c.tier === 'goat').length} ultimes</span><span><b>${COL.packs}</b> packs ouverts</span></div><div class="pg-bar"><i style="width:${Math.round(n / CARD_LIST.length * 100)}%"></i></div>
     <div class="bonusbar"><span>🎁 Pack bonus : <b>${COL.packs % BONUS_EVERY}</b> / ${BONUS_EVERY} packs ouverts</span><div class="pg-bar"><i style="width:${Math.round(COL.packs % BONUS_EVERY / BONUS_EVERY * 100)}%"></i></div></div>`;
   document.querySelectorAll('#shopTabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === SHOP_TAB));
@@ -417,9 +417,12 @@ function renderShop() {
         <div style="min-width:0"><h3>${esc(P.n)}</h3><p>${esc(P.txt)}</p><div class="odds">${odds}</div>${btn}</div></div>`;
     }).join('')}</div>
     <p class="hint">Jamais de doublon : un pack ne te donne que des cartes que tu n'as pas encore. Tu gagnes des pièces à chaque match en ligne : victoire 500, nul 250, défaite 120, plus 60 par but. Tous les ${BONUS_EVERY} packs ouverts, un pack bonus est offert.</p>`;
+    body.insertAdjacentHTML('beforeend', `<form class="card codebox" id="codeForm"><h3>🔑 Code secret</h3><p class="hint">Certains joueurs ne sont dans aucun pack. Si tu connais le code, tape-le ici.</p>
+      <div class="joinrow"><input id="codeIn" maxlength="24" placeholder="CODE SECRET" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="Code secret"><button class="btn small primary" type="submit">Valider</button></div></form>`);
+    $('#codeForm').onsubmit = e => { e.preventDefault(); redeemCode($('#codeIn').value); };
     body.querySelectorAll('[data-pack]').forEach(b => b.onclick = () => buyPack(b.dataset.pack));
   } else {
-    const list = CARD_LIST.filter(c => FILTER === 'all' || (FILTER === 'miss' ? !have.has(c.id) : FILTER === 'mine' ? have.has(c.id) : c.tier === FILTER))
+    const list = [...SECRETS.filter(c => have.has(c.id) && (FILTER === 'all' || FILTER === 'mine')), ...CARD_LIST].filter(c => c.secret || FILTER === 'all' || (FILTER === 'miss' ? !have.has(c.id) : FILTER === 'mine' ? have.has(c.id) : c.tier === FILTER))
       .sort((a, b) => (have.has(b.id) - have.has(a.id)) || TRANK[b.tier] - TRANK[a.tier] || b.r - a.r);
     body.innerHTML = `<div class="filters">${[['all', 'Toutes'], ['mine', 'Les miennes'], ['goat', 'Ultimes'], ['leg', 'Légendes'], ['elite', 'Élite'], ['rare', 'Rare'], ['or', 'Or'], ['miss', 'Manquantes']].map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${FILTER === k}">${l}</button>`).join('')}</div>
       <div class="cgrid">${list.map(c => have.has(c.id) ? cardHTML(c) : lockedHTML(c)).join('')}</div>`;
@@ -427,6 +430,17 @@ function renderShop() {
   }
 }
 document.querySelectorAll('#shopTabs button').forEach(b => b.addEventListener('click', () => { SHOP_TAB = b.dataset.tab; renderShop(); }));
+/** Code secret : le serveur vérifie le code et ajoute la carte */
+async function redeemCode(code) {
+  if (BUSY || !code.trim()) return; BUSY = true; audio();
+  const { data, error } = await sb.rpc('redeem_code', { p_code: code });
+  BUSY = false;
+  if (error) { toast(/bad_code/.test(error.message || '') ? '❌ Ce code ne marche pas.' : 'Impossible pour l\'instant. Vérifie ta connexion.'); buzz(60); return; }
+  if (data.already) { toast(`Tu as déjà ${CARDS[data.card]?.name || 'cette carte'} !`); return; }
+  COL.cards = COL.cards.concat(data.card); $('#codeIn').value = '';
+  renderShop();
+  showPack('secret', [data.card], a => { if (a === 'team') openClub(); });
+}
 const PACK_ERR = { not_enough_coins: 'Tu n\'as pas assez de pièces pour ce pack.', free_not_ready: 'Le pack gratuit n\'est pas encore disponible.', nothing_left: 'Il ne reste plus de carte à gagner dans ce pack.' };
 async function buyPack(type) {
   if (BUSY) return; BUSY = true; audio();
@@ -941,7 +955,7 @@ let GAME = null;
 function metaOf(cfg, humans, names) {
   const team = cfg.teams || [TEAMS[cfg.t0], TEAMS[cfg.t1]];
   const players = [];
-  for (let t = 0; t < 2; t++) team[t].sq.forEach((q, i) => players.push({ t, i, gk: i === 0, num: q[1], name: q[0], r: q[2] }));
+  for (let t = 0; t < 2; t++) team[t].sq.forEach((q, i) => players.push({ t, i, gk: i === 0, num: q[1], name: q[0], r: q[2], hair: q[3]?.hair || null, sp: q[3]?.sp || null }));
   return { team, kit: pickKits(team[0], team[1]), players, humans, names, dur: cfg.dur, coop: !!cfg.multi, pn: cfg.pn || null };
 }
 function resetLocalInput() { Object.assign(LI, { tx: 0, ty: 0, joyOn: false, a: 0, l: 0, b: 0, rel: 0, relCharge: 0, bDown: false, aDown: false }); ptrs.clear(); }
@@ -1177,7 +1191,7 @@ function renderEnd(g, sum, rating) {
   const rec = g.rec;
   if (rec && rec.frames > 30) {
     const title = `${M.team[0].short} ${sc[0]}–${sc[1]} ${M.team[1].short}${g.online ? '' : ' (ordi)'}`.slice(0, 80);
-    const meta = { team: M.team.map(t => ({ name: t.name, short: t.short, h: t.h, c1: t.c1, c2: t.c2 })), kit: M.kit, players: M.players.map(p => ({ t: p.t, i: p.i, gk: p.gk, num: p.num, name: p.name })), names: g.names, dur: M.dur, score: sc };
+    const meta = { team: M.team.map(t => ({ name: t.name, short: t.short, h: t.h, c1: t.c1, c2: t.c2 })), kit: M.kit, players: M.players.map(p => ({ t: p.t, i: p.i, gk: p.gk, num: p.num, name: p.name, hair: p.hair || undefined, sp: p.sp || undefined })), names: g.names, dur: M.dur, score: sc };
     mk('▶ Revoir le match', '', async () => openReplay({ data: await encode(rec.data()), meta, title }));
     let saved = null;
     const save = async () => { if (saved) return saved; const r = await saveReplay(rec, meta, title); if (r) { saved = r; sv.textContent = '✓ Replay sauvegardé'; sv.disabled = true; } return r; };

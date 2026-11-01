@@ -58,7 +58,7 @@ export function createMatch(cfg) {
   };
   for (let t = 0; t < 2; t++) for (let i = 0; i < 5; i++) {
     const sq = team[t].sq[i];
-    const p = { t, i, gk: i === 0, num: sq[1], name: sq[0], r: sq[2], st: { but: 0, tir: 0, pas: 0, vol: 0, arr: 0 },
+    const p = { t, i, gk: i === 0, num: sq[1], name: sq[0], r: clamp(sq[2], 30, 99), disp: sq[2], sp: sq[3]?.sp || null, hair: sq[3]?.hair || null, st: { but: 0, tir: 0, pas: 0, vol: 0, arr: 0 },
       x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: dirOf(t), kcd: 0, tcd: 0, stun: 0, holdT: 0, aiT: Math.random() * .4, ox: 0, oy: 0, offT: 0 };
     G.players.push(p); G.byTeam[t].push(p);
   }
@@ -75,7 +75,7 @@ function setupKickoff(G, kt, first) {
     p.stun = 0; p.kcd = 0; p.tcd = 0; p.holdT = 0;
   }
   const k = G.byTeam[kt][3]; k.x = CX; k.y = 50 - dirOf(kt) * (PR + BR + .25);
-  const b = G.ball; b.x = CX; b.y = 50; b.vx = b.vy = 0; b.z = b.vz = 0; b.owner = null;
+  const b = G.ball; b.x = CX; b.y = 50; b.vx = b.vy = 0; b.z = b.vz = 0; b.owner = null; b.lift = 0; b.spec = '';
   giveBall(G, k);
   G.ctrl = G.slots.map(() => null);
   for (let s = 0; s < G.slots.length; s++) {
@@ -127,7 +127,7 @@ function giveBall(G, p) {
   const b = G.ball;
   const prev = b.last;
   p.assisted = false; p.zoneT = 0;
-  b.owner = p; b.vx = b.vy = 0; b.z = b.vz = 0; b.cross = false; b.last = p; b.protect = .7; G.passTarget = null; G.passPt = null;
+  b.owner = p; b.vx = b.vy = 0; b.z = b.vz = 0; b.lift = 0; b.cross = false; b.last = p; b.protect = .7; G.passTarget = null; G.passPt = null;
   if (G.hum[p.t] && !p.gk && !isCtrl(G, p)) {
     // le ballon arrive chez un joueur libre : l'humain qui a fait la passe le suit, sinon le plus proche
     let s = prev && prev.t === p.t ? slotOf(G, prev) : -1;
@@ -193,6 +193,7 @@ function canVolley(G, p) {
 }
 const wantsShot = (G, p) => isCtrl(G, p) && (G.hold[slotOf(G, p)] || (p.wantShot || 0) > 0);
 function volley(G, p) {
+  if (special(G, p)) return;
   const b = G.ball, gy = atkY(p.t), tm = T(G, p), gk = G.byTeam[1 - p.t][0];
   const aimX = CX + (gk.x > CX ? -1 : 1) * rnd(2.5, GH - 1);
   const a = Math.atan2(gy - b.y, aimX - b.x) + gauss() * (1.12 - (tm.att + pb(G, p)) / 100) * (p.r >= 90 ? .26 : .34);
@@ -220,6 +221,7 @@ function header(G, p) {
     p.flip = .7; b.spec = 'bicycle'; ev(G, 'bicycle', {}); banner(G, 'RETOURNÉE !', p.name, 1.1, p.t); G.passTarget = null;
     return;
   }
+  if (attacking && special(G, p)) return;
   if (attacking) {
     const tm = T(G, p), gk = G.byTeam[1 - p.t][0];
     const aimX = CX + (gk.x > CX ? -1 : 1) * rnd(2, GH - 1.2);
@@ -235,7 +237,32 @@ function header(G, p) {
     ev(G, 'header', {});
   }
 }
+/** Pouvoirs des cartes spéciales : lucarne directe (cartes secrètes) ou contre son camp (les potes) */
+function special(G, p) {
+  if (!p.sp) return false;
+  const b = G.ball, gk = G.byTeam[1 - p.t][0];
+  if (p.sp === 'lucarne') {
+    const gy = atkY(p.t), side = gk.x > CX ? -1 : 1, tx = CX + side * (GH - 1.1), D = hyp(tx - b.x, gy - b.y);
+    const sp = 55, t = -Math.log(Math.max(.05, 1 - .12 * D / sp)) / .12, vz = (2.0 - .2 + GRAV * t * t / 2) / t;
+    p.st.tir++; G.stats.shots[p.t]++; G.stats.onT[p.t]++;
+    kick(G, p, (tx - b.x) / D * sp, (gy - b.y) / D * sp, 1.6, vz);
+    b.spec = 'lucarne'; b.lift = 99; G.passTarget = null;
+    ev(G, 'volley', {}); banner(G, 'LUCARNE !', p.name, 1, p.t);
+    return true;
+  }
+  if (p.sp === 'csc') {
+    const gy = ownY(p.t), tx = CX + rnd(-3, 3), D = hyp(tx - b.x, gy - b.y), sp = 55;
+    const t = -Math.log(Math.max(.05, 1 - .12 * D / sp)) / .12, vz = (1.0 - .2 + GRAV * t * t / 2) / t;
+    p.st.tir++;
+    kick(G, p, (tx - b.x) / D * sp, (gy - b.y) / D * sp, 1.2, vz);
+    b.spec = 'csc'; b.lift = 99; G.passTarget = null;
+    banner(G, 'OH NON !', p.name + ' tire dans le mauvais sens', 1.1, p.t);
+    return true;
+  }
+  return false;
+}
 function shoot(G, p, power, aim) {
+  if (special(G, p)) return;
   const tm = T(G, p), gy = atkY(p.t), b = G.ball;
   const tx = CX + clamp(aim, -1, 1) * (GH - 1.1);
   let a = Math.atan2(gy - b.y, tx - b.x);
@@ -250,6 +277,7 @@ function shoot(G, p, power, aim) {
 }
 /** Tir lobé : le ballon monte au-dessus du gardien et retombe sous la barre */
 function chip(G, p, aim) {
+  if (special(G, p)) return;
   const tm = T(G, p), gy = atkY(p.t), b = G.ball;
   const tx = CX + clamp(aim, -1, 1) * (GH - 2), D = hyp(tx - b.x, gy - b.y);
   const sp = clamp(D * .9, 10, 19), t = -Math.log(1 - .12 * D / sp) / .12; // trajectoire freinée par l'air
@@ -698,6 +726,6 @@ export function snapshot(G) {
 export function summary(G) {
   return {
     score: G.score, stats: G.stats, scorers: G.scorers,
-    players: G.players.map(p => ({ t: p.t, i: p.i, name: p.name, num: p.num, r: p.r, gk: p.gk, st: p.st })),
+    players: G.players.map(p => ({ t: p.t, i: p.i, name: p.name, num: p.num, r: p.disp ?? p.r, gk: p.gk, st: p.st, sp: p.sp, hair: p.hair })),
   };
 }

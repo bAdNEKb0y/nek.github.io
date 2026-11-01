@@ -132,6 +132,12 @@ TEAMS.filter(t=>!t.nat).forEach(t=>t.sq.forEach((q,i)=>addCard({id:t.short+'-'+i
 STARS.forEach((q,i)=>{const ci=clubInfo(q[4]);addCard({id:'STAR-'+i,name:q[0],num:q[1],pos:q[2],r:q[3],club:ci.n,kit:ci.k})});
 LEGENDS.forEach((l,i)=>addCard({id:'LEG-'+i,name:l[0],num:l[1],pos:l[2],r:l[3],club:'Légende',kit:l[4],leg:true}));
 ULTIMES.forEach((q,i)=>{const ci=clubInfo(q[4]);addCard({id:'ULT-'+i,name:q[0],num:q[1],pos:q[2],r:q[3],club:ci.n,kit:ci.k,goat:true})});
+/* Les potes : niveau 1, et quand elles tirent… c'est contre leur camp */
+[['Diane',11,['#ff4fa3','#ffffff','solid']],['Alix',12,['#7c3aed','#ffffff','solid']]].forEach((q,i)=>addCard({id:'POTE-'+i,name:q[0],num:q[1],pos:'ATT',r:1,club:'Les Potes',kit:q[2],sp:'csc'}));
+/* Cartes secrètes (pas dans les packs) : à débloquer avec un code. Leurs tirs vont en pleine lucarne. */
+export const SECRETS=[];
+[['Le Blond',20,'#e8c25a'],['Le Brun',21,'#4a2e18']].forEach((q,i)=>{const c={id:'SEC-'+i,name:q[0],num:q[1],pos:'ATT',r:200,club:'Secret',kit:['#111111','#d4af37','band'],tier:'secret',secret:true,sp:'lucarne',hair:q[2]};CARDS[c.id]=c;SECRETS.push(c)});
+TIER_NAME.secret='Secret'; TRANK.secret=5;
 
 /* Maillots disponibles pour une équipe perso */
 export const KITS=[...TEAMS.map(t=>({id:t.short,k:t.h})),
@@ -145,13 +151,14 @@ export const PACKS={
   bonus:{n:'Pack Bonus',price:0,count:3,odds:{or:0,rare:55,elite:35,leg:9.5,goat:.5},txt:'Offert tous les 20 packs ouverts (et avec le cadeau du 7e jour). 3 cartes, la 1re au moins Élite.'},
   icon:{n:'Pack Icône',price:15000,count:1,odds:{or:0,rare:0,elite:0,leg:99.5,goat:.5},txt:'1 Légende garantie. Une chance infime d\'avoir Messi ou Ronaldo.'},
 };
+PACKS.secret={n:'Pack Secret',price:0,count:1,odds:{},txt:'Débloqué avec un code secret.'};
 const FILLER=['Remplaçant',0,64];
 function initials(name){const w=name.normalize('NFD').replace(/[^A-Za-z ]/g,'').trim().split(/\s+/).filter(Boolean);return ((w.length>1?w.map(x=>x[0]).join(''):(w[0]||'PERSO'))).toUpperCase().slice(0,3)}
 /** Construit une équipe jouable à partir d'une équipe perso enregistrée */
 export function customTeam(team){
   const slots=(team&&team.slots)||[null,null,null,null,null];
-  const sq=slots.map((id,i)=>{const c=id&&CARDS[id];return c?[c.name,c.num,c.r]:[FILLER[0],[1,4,5,10,9][i],FILLER[2]]});
-  const r=sq.map(q=>q[2]),avg=a=>Math.round(a.reduce((x,y)=>x+y,0)/a.length);
+  const sq=slots.map((id,i)=>{const c=id&&CARDS[id];return c?[c.name,c.num,c.r,c.sp||c.hair?{sp:c.sp||null,hair:c.hair||null}:null]:[FILLER[0],[1,4,5,10,9][i],FILLER[2]]});
+  const r=sq.map(q=>Math.max(30,Math.min(99,q[2]))),avg=a=>Math.round(a.reduce((x,y)=>x+y,0)/a.length);
   const att=avg([r[3],r[4]]),def=avg([r[0],r[1],r[2]]),pas=avg(r),vit=avg([r[1],r[2],r[3],r[3],r[4],r[4]]);
   const kd=KITS.find(k=>k.id===(team&&team.kit))||KITS[KITS.length-6];
   const name=(team&&team.name)||'Mon équipe';

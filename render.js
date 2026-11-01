@@ -190,6 +190,11 @@ export function createRenderer(canvas) {
     const mv = Math.hypot(x - an.x, y - an.y); an.x = x; an.y = y;
     an.sp += (Math.min(mv / Math.max(1, r * .35), 1) - an.sp) * .25; an.ph += mv / Math.max(1, r * .9);
     const ang = Math.atan2(fy, fx);
+    if (meta.sp === 'lucarne') { // aura dorée des cartes secrètes
+      const k = .55 + Math.sin(performance.now() / 220 + i) * .25, g2 = ctx.createRadialGradient(x, y, r * .6, x, y, r * 2.1);
+      g2.addColorStop(0, `rgba(255,214,90,${.45 * k})`); g2.addColorStop(1, 'rgba(255,214,90,0)');
+      ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(x, y, r * 2.1, 0, Math.PI * 2); ctx.fill();
+    }
     // ombre douce
     ctx.fillStyle = 'rgba(0,0,0,.26)'; ctx.beginPath(); ctx.ellipse(x + r * .3, y + r * .42, r * 1.08, r * .82, 0, 0, Math.PI * 2); ctx.fill();
     // joueur contrôlé : anneau au sol qui pulse
@@ -230,6 +235,10 @@ export function createRenderer(canvas) {
       else if (kit.p === 'band') { ctx.fillStyle = '#fff'; ctx.fillRect(x - r * .38, y - r, r * .76, 2 * r); ctx.fillStyle = kit.c2; ctx.fillRect(x - r * .3, y - r, r * .6, 2 * r); }
       else if (kit.p === 'diag') { ctx.beginPath(); ctx.moveTo(x - r, y + r); ctx.lineTo(x + r, y - r); ctx.lineTo(x + r, y + r); ctx.closePath(); ctx.fill(); }
       else if (kit.p === 'sleeves') { ctx.fillRect(x - r, y - r, r * .42, 2 * r); ctx.fillRect(x + r * .58, y - r, r * .42, 2 * r); }
+    }
+    if (meta.hair) { // cheveux vus de dessus (cartes secrètes) : calotte à l'arrière de la tête
+      ctx.fillStyle = meta.hair; ctx.beginPath(); ctx.arc(x - Math.cos(ang) * r * .55, y - Math.sin(ang) * r * .55, r * .78, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(x - Math.cos(ang) * r * .7, y - Math.sin(ang) * r * .7, r * .3, 0, Math.PI * 2); ctx.fill();
     }
     // relief : éclat en haut à gauche, ombre en bas à droite (effet bouton bombé)
     const sh = ctx.createRadialGradient(x - r * .38, y - r * .42, r * .05, x, y, r * 1.08);
