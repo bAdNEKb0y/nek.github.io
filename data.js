@@ -136,7 +136,7 @@ ULTIMES.forEach((q,i)=>{const ci=clubInfo(q[4]);addCard({id:'ULT-'+i,name:q[0],n
 [['Diane',11,['#ff4fa3','#ffffff','solid']],['Alix',12,['#7c3aed','#ffffff','solid']]].forEach((q,i)=>addCard({id:'POTE-'+i,name:q[0],num:q[1],pos:'ATT',r:1,club:'Les Potes',kit:q[2],sp:'csc'}));
 /* Cartes secrètes (pas dans les packs) : à débloquer avec un code. Leurs tirs vont en pleine lucarne. */
 export const SECRETS=[];
-[['Le Blond',20,'#e8c25a'],['Le Brun',21,'#4a2e18']].forEach((q,i)=>{const c={id:'SEC-'+i,name:q[0],num:q[1],pos:'ATT',r:200,club:'Secret',kit:['#111111','#d4af37','band'],tier:'secret',secret:true,sp:'lucarne',hair:q[2]};CARDS[c.id]=c;SECRETS.push(c)});
+[['Félix',20,'#e8c25a'],['Hector',21,'#4a2e18']].forEach((q,i)=>{const c={id:'SEC-'+i,name:q[0],num:q[1],pos:'ATT',r:200,club:'Secret',kit:['#111111','#d4af37','band'],tier:'secret',secret:true,sp:'lucarne',hair:q[2]};CARDS[c.id]=c;SECRETS.push(c)});
 TIER_NAME.secret='Secret'; TRANK.secret=5;
 
 /* Maillots disponibles pour une équipe perso */
