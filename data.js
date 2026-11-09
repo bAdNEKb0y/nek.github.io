@@ -134,7 +134,7 @@ LEGENDS.forEach((l,i)=>addCard({id:'LEG-'+i,name:l[0],num:l[1],pos:l[2],r:l[3],c
 ULTIMES.forEach((q,i)=>{const ci=clubInfo(q[4]);addCard({id:'ULT-'+i,name:q[0],num:q[1],pos:q[2],r:q[3],club:ci.n,kit:ci.k,goat:true})});
 /* Les potes : niveau 1, et quand elles tirent… c'est contre leur camp */
 [['Diane',11,['#ff4fa3','#ffffff','solid']],['Alix',12,['#7c3aed','#ffffff','solid']]].forEach((q,i)=>addCard({id:'POTE-'+i,name:q[0],num:q[1],pos:'ATT',r:1,club:'Les Potes',kit:q[2],sp:'csc'}));
-addCard({id:'POTE-2',name:'Arron',num:9,pos:'ATT',r:85,club:'Les Potes',kit:['#0ea5e9','#ffffff','solid']});
+addCard({id:'POTE-2',name:'Arron',num:9,pos:'ATT',r:111,club:'Les Potes',kit:['#0ea5e9','#ffffff','solid']});
 /* Cartes secrètes (pas dans les packs) : à débloquer avec un code. Leurs tirs vont en pleine lucarne. */
 export const SECRETS=[];
 [['Félix',20,'#e8c25a'],['Hector',21,'#4a2e18']].forEach((q,i)=>{const c={id:'SEC-'+i,name:q[0],num:q[1],pos:'ATT',r:200,club:'Secret',kit:['#111111','#d4af37','band'],tier:'secret',secret:true,sp:'lucarne',hair:q[2]};CARDS[c.id]=c;SECRETS.push(c)});
