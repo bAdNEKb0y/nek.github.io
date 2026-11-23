@@ -261,12 +261,12 @@ function special(G, p) {
   }
   return false;
 }
-function shoot(G, p, power, aim) {
+function shoot(G, p, power, aim, steady = 1) {
   if (special(G, p)) return;
   const tm = T(G, p), gy = atkY(p.t), b = G.ball;
   const tx = CX + clamp(aim, -1, 1) * (GH - 1.1);
   let a = Math.atan2(gy - b.y, tx - b.x);
-  a += gauss() * (1.1 - (tm.att + pb(G, p)) / 100) * .2 * (.35 + power);
+  a += gauss() * (1.1 - (tm.att + pb(G, p)) / 100) * .2 * (.35 + power) * steady;
   const sp = 32 + power * 36 + (tm.att - 75) * .25 + pb(G, p) * .3;
   const vx = Math.cos(a) * sp, vy = Math.sin(a) * sp;
   p.st.tir++;
@@ -377,13 +377,15 @@ function humanControl(G, s, I, dt) {
 
   if (own === c) {
     // Assistance au tir : près du but, quand on galère et qu'une fenêtre s'ouvre, ça tire tout seul
-    if (G.cfg.assist?.[s] && !I.a && !I.lob && !I.bDown && !I.rel && G.state === 'play') {
-      const near = toGoalOf(t, c.y) < 19 && Math.abs(c.x - CX) < 15;
+    const vsBots = !G.hum?.[1 - t]; // contre l'ordi, l'aide est un peu plus généreuse
+    const help = G.cfg.assist?.[s] ? (vsBots ? 2 : 1) : 0;
+    if (help && !I.a && !I.lob && !I.bDown && !I.rel && G.state === 'play') {
+      const near = toGoalOf(t, c.y) < (help > 1 ? 22 : 19) && Math.abs(c.x - CX) < (help > 1 ? 17 : 15);
       c.zoneT = near ? (c.zoneT || 0) + dt : 0;
       const pressed = G.byTeam[1 - t].some(o => !o.gk && dist(o, c) < 3.6);
-      if (near && (c.zoneT > 1 || (pressed && c.zoneT > .35)) && !c.assisted) {
+      if (near && (c.zoneT > (help > 1 ? .75 : 1) || (pressed && c.zoneT > .3)) && !c.assisted) {
         const aim = assistAim(G, c);
-        if (aim != null) { c.assisted = true; c.zoneT = 0; shoot(G, c, .8, aim); G.charge[s] = 0; G.preview[s] = null; ev(G, 'assist', { t }); return; }
+        if (aim != null) { c.assisted = true; c.zoneT = 0; shoot(G, c, .85, aim, help > 1 ? .6 : 1); G.charge[s] = 0; G.preview[s] = null; ev(G, 'assist', { t }); return; }
       }
     }
     const dx = mag > .3 ? I.jx / I.mag : c.fx, dy = mag > .3 ? I.jy / I.mag : c.fy;
@@ -395,9 +397,15 @@ function humanControl(G, s, I, dt) {
     else {
       if (I.bDown) G.charge[s] = Math.min(1, G.charge[s] + dt / .85);
       if (I.rel) {
-        const pw = Math.max(.18, I.relCharge || G.charge[s]);
-        const aim = mag > .25 ? clamp(I.jx / I.mag * 1.25, -1, 1) : clamp((CX - c.x) / CX * .6, -.6, .6);
-        shoot(G, c, pw, aim); G.charge[s] = 0; G.preview[s] = null;
+        let pw = Math.max(.18, I.relCharge || G.charge[s]);
+        let aim = mag > .25 ? clamp(I.jx / I.mag * 1.25, -1, 1) : clamp((CX - c.x) / CX * .6, -.6, .6), steady = 1;
+        // Aide à la visée : le tir est attiré vers le coin le plus libre, un peu plus précis et jamais trop mou
+        if (help && toGoalOf(t, c.y) < 34) {
+          const best = assistAim(G, c);
+          if (best != null) aim = aim * (help > 1 ? .35 : .6) + best * (help > 1 ? .65 : .4);
+          steady = help > 1 ? .55 : .8; pw = Math.max(pw, help > 1 ? .45 : .3);
+        }
+        shoot(G, c, pw, aim, steady); G.charge[s] = 0; G.preview[s] = null;
       }
     }
   } else {
