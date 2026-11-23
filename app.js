@@ -30,8 +30,11 @@ const SCREENS = ['auth', 'watch', 'home', 'club', 'shop', 'lobby', 'tlobby', 'pd
     root.style.setProperty('--vvh', vv.height + 'px'); root.style.setProperty('--vvt', vv.offsetTop + 'px');
     root.classList.toggle('kb', kb);
     if (!kb && (scrollY || scrollX)) scrollTo(0, 0);
+    dispatchEvent(new Event('fdp-viewport'));
   };
-  vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd); addEventListener('orientationchange', () => setTimeout(upd, 300)); upd();
+  // Vieux iPhone : la taille de l'écran n'est juste qu'un peu après la rotation, on remesure plusieurs fois
+  const later = () => [60, 250, 600, 1200].forEach(t => setTimeout(upd, t));
+  vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd); addEventListener('orientationchange', later); addEventListener('resize', later); upd();
 })();
 function show(id) { showReactBtn(id === 'game' && SET.reactBtn); document.body.classList.toggle('ingame', id === 'game'); SCREENS.forEach(s => { const el = $('#' + s), was = el.hidden; el.hidden = s !== id; if (s === id && was) el.scrollTop = 0; }); } // nouvel écran : on repart du haut
 let toastT;
@@ -999,6 +1002,7 @@ function beginGame({ cfg, side, online, names, uids, slot = side, host = side ==
   keepAwake();
 }
 addEventListener('resize', () => { if (GAME) R.resize(); });
+addEventListener('fdp-viewport', () => { if (GAME) requestAnimationFrame(() => R.resize()); });
 screen.orientation?.addEventListener?.('change', () => setTimeout(() => GAME && R.resize(), 200));
 
 function interp(snaps, now) {

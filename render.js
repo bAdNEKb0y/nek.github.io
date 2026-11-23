@@ -41,7 +41,8 @@ export function createRenderer(canvas) {
     const r = canvas.getBoundingClientRect();
     R.W = Math.max(200, r.width); R.H = Math.max(160, r.height);
     R.DPR = SET.saver ? 1 : Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(R.W * R.DPR); canvas.height = Math.round(R.H * R.DPR);
+    const cw = Math.round(R.W * R.DPR), ch = Math.round(R.H * R.DPR);
+    if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; } // pas de réallocation inutile (mémoire des vieux iPhone)
     R.hud = R.H < 420 ? 40 : 52;
     const availH = R.H - R.hud - 10, availW = R.W - 20;
     const fit = Math.min(availH / (FW + 5), availW / (FL + 2 * GD + 4));
