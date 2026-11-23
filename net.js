@@ -165,29 +165,49 @@ export class Room {
   }
 }
 
-/** Partie rapide : apparie les joueurs qui attendent. Résout {code, role}. */
+/** Partie rapide : apparie les joueurs qui attendent. Résout {code, role}.
+ *  Poignée de main : le plus ancien des deux envoie une offre, l'autre l'accepte. Les « fantômes »
+ *  (onglet fermé, réseau coupé) qui ne répondent pas sont ignorés pendant 20 s. */
 export function quickMatch(me, onWaiting) {
-  let ch, done = false;
-  const myCode = newCode(), at = Date.now();
+  let ch, done = false, offerT = 0, waitT = 0, waitFor = null, pendingTo = null;
+  const myCode = newCode(), at = Date.now(), ignore = new Map();
   const p = new Promise((resolve, reject) => {
-    ch = sb.channel('quick', { config: { presence: { key: me.uid } } });
-    ch.on('presence', { event: 'sync' }, () => {
-      if (done) return;
-      const all = Object.values(ch.presenceState()).map(a => a[0]).filter(Boolean).sort((a, b) => a.at - b.at || (a.uid < b.uid ? -1 : 1));
+    const finish = res => { if (done) return; done = true; clearTimeout(offerT); clearTimeout(waitT); setTimeout(() => { sb.removeChannel(ch); resolve(res); }, 300); };
+    const pick = () => {
+      if (done || pendingTo) return;
+      const now = Date.now();
+      const all = Object.values(ch.presenceState()).map(a => a[0]).filter(x => x && x.uid && !(ignore.get(x.uid) > now))
+        .sort((a, b) => a.at - b.at || (a.uid < b.uid ? -1 : 1));
       const i = all.findIndex(x => x.uid === me.uid);
+      onWaiting?.(all.length);
       if (i < 0) return;
       const partner = i % 2 === 0 ? all[i + 1] : all[i - 1];
-      onWaiting?.(all.length);
       if (!partner) return;
-      done = true;
-      const res = i % 2 === 0 ? { code: myCode, role: 'host' } : { code: partner.code, role: 'guest' };
-      setTimeout(() => { sb.removeChannel(ch); resolve(res); }, 400);
+      if (i % 2 === 1) { // le plus ancien de la paire fait l'offre ; s'il ne répond jamais, c'est un fantôme
+        if (waitFor !== partner.uid) { clearTimeout(waitT); waitFor = partner.uid; waitT = setTimeout(() => { if (done) return; ignore.set(waitFor, Date.now() + 20000); waitFor = null; pick(); }, 5000); }
+        return;
+      }
+      pendingTo = partner.uid;
+      ch.send({ type: 'broadcast', event: 'offer', payload: { from: me.uid, to: partner.uid, code: myCode } });
+      offerT = setTimeout(() => { ignore.set(pendingTo, Date.now() + 20000); pendingTo = null; pick(); }, 3500);
+    };
+    ch = sb.channel('quick', { config: { presence: { key: me.uid }, broadcast: { self: false } } });
+    ch.on('presence', { event: 'sync' }, pick);
+    ch.on('broadcast', { event: 'offer' }, ({ payload: o }) => {
+      if (done || !o || o.to !== me.uid) return;
+      if (pendingTo && pendingTo !== o.from) { clearTimeout(offerT); pendingTo = null; } // l'autre est plus ancien : on accepte son offre
+      ch.send({ type: 'broadcast', event: 'accept', payload: { from: me.uid, to: o.from } });
+      finish({ code: o.code, role: 'guest' });
+    });
+    ch.on('broadcast', { event: 'accept' }, ({ payload: a }) => {
+      if (done || !a || a.to !== me.uid || a.from !== pendingTo) return;
+      finish({ code: myCode, role: 'host' });
     });
     ch.subscribe(async st => {
       if (st === 'SUBSCRIBED') await ch.track({ uid: me.uid, code: myCode, at, name: me.name });
-      else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') reject(new Error(st));
+      else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') { if (!done) reject(new Error(st)); }
     });
   });
-  p.cancel = () => { done = true; if (ch) sb.removeChannel(ch); };
+  p.cancel = () => { done = true; clearTimeout(offerT); clearTimeout(waitT); if (ch) sb.removeChannel(ch); };
   return p;
 }

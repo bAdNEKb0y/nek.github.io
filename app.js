@@ -33,7 +33,7 @@ const SCREENS = ['auth', 'watch', 'home', 'club', 'shop', 'lobby', 'tlobby', 'pd
   };
   vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd); addEventListener('orientationchange', () => setTimeout(upd, 300)); upd();
 })();
-function show(id) { showReactBtn(id === 'game' && SET.reactBtn); SCREENS.forEach(s => { const el = $('#' + s), was = el.hidden; el.hidden = s !== id; if (s === id && was) el.scrollTop = 0; }); } // nouvel écran : on repart du haut
+function show(id) { showReactBtn(id === 'game' && SET.reactBtn); document.body.classList.toggle('ingame', id === 'game'); SCREENS.forEach(s => { const el = $('#' + s), was = el.hidden; el.hidden = s !== id; if (s === id && was) el.scrollTop = 0; }); } // nouvel écran : on repart du haut
 let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 
@@ -110,7 +110,7 @@ async function afterLogin() {
     // une seule fois : on propose d'activer les notifications
     let asked = false; try { asked = localStorage.getItem('fdp-push-asked') === '1'; } catch { }
     const st = await pushState();
-    if (!asked && (st === 'off' || st === 'ios-home')) { try { localStorage.setItem('fdp-push-asked', '1'); } catch { } setTimeout(() => toast(st === 'ios-home' ? '🔔 Pour recevoir les notifs de tes amis : Partager ⬆️ → « Sur l\'écran d\'accueil ». Détails dans ⚙️ Paramètres.' : '🔔 Active les notifications dans ⚙️ Paramètres pour savoir quand tes amis t\'écrivent.'), 4500); }
+    if (!asked && (st === 'off' || st === 'ios-home')) { try { localStorage.setItem('fdp-push-asked', '1'); } catch { } setTimeout(() => !GAME && toast(st === 'ios-home' ? '🔔 Pour recevoir les notifs de tes amis : Partager ⬆️ → « Sur l\'écran d\'accueil ». Détails dans ⚙️ Paramètres.' : '🔔 Active les notifications dans ⚙️ Paramètres pour savoir quand tes amis t\'écrivent.'), 4500); }
   });
   initSocial({ me: () => ME, col: () => COL, toast, busy: () => !!GAME || !!ROOM, sound: soft => { if (!SET.msgSound) return; audio(); SND.coin(); buzz(soft ? 30 : [40, 30, 40]); }, inMatch: () => !!GAME && !GAME.done,
     createRoom: () => { const c = newCode(); enterRoom(c, 'host'); return c; }, joinRoom: c => joinAny(cleanCode(c)), onMeChange: () => renderMe(),
@@ -134,7 +134,7 @@ function renderMe() {
   if (COL) {
     const t = customTeam(COL.team), n = COL.cards.length;
     $('#clubTxt').textContent = `${t.name} · note ${t.ovr}`;
-    $('#shopTxt').textContent = `${n} / ${CARD_LIST.length} cartes · ${freeReady() ? 'pack gratuit dispo !' : 'pack gratuit dans ' + freeLeft()}`;
+    $('#shopTxt').textContent = `${n} / ${CARD_LIST.length} cartes · ${COL.gift_leg > 0 ? '🎁 pack Légende offert !' : freeReady() ? 'pack gratuit dispo !' : 'pack gratuit dans ' + freeLeft()}`;
   }
   const k = ME.avatar ? kitOf(ME) : ME.fav_team === 'PERSO' && COL ? customTeam(COL.team).h : TEAMS[teamIdx(ME.fav_team)].h;
   $('#meCard').innerHTML = `<div class="av">${shirtSVG(k)}</div><div><b>${esc(ME.display)}</b><small>${ME.title ? esc(ME.title) : `${ME.wins} V · ${ME.draws} N · ${ME.losses} D`}</small></div><div class="elo" title="Classement Elo">${ME.rating}</div>`;
@@ -216,7 +216,7 @@ onSetting(k => { if (['saver', 'cam', 'btn', 'lefty', 'pitch'].includes(k) && GA
 const THEMES = { or: ['#ffc94a', '#f3d27a', '#9a7424'], bleu: ['#5ab8ff', '#9fd4ff', '#2a5f96'], rose: ['#ff6fae', '#ffb3d4', '#a3346a'], vert: ['#5fe08a', '#a8f0bf', '#2c7a48'], violet: ['#b58cff', '#d6c2ff', '#5d3a9e'], rouge: ['#ff6a5a', '#ffb0a6', '#9e2c22'] };
 function applyLook() {
   const t = THEMES[SET.theme] || THEMES.or, st = document.documentElement.style;
-  st.setProperty('--flood', t[0]); st.setProperty('--gold-1', t[1]); st.setProperty('--gold-2', t[2]);
+  st.setProperty('--flood', t[0]); st.setProperty('--flood-rgb', [1, 3, 5].map(i => parseInt(t[0].slice(i, i + 2), 16)).join(',')); st.setProperty('--gold-1', t[1]); st.setProperty('--gold-2', t[2]);
   document.body.style.fontSize = Math.round(15 * (SET.textSize || 1)) + 'px';
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', '#0b1411');
 }
@@ -411,9 +411,10 @@ function renderShop() {
       let btn;
       if (n >= CARD_LIST.length) btn = '<button class="buy" disabled>Collection complète</button>';
       else if (k === 'bonus') btn = `<button class="buy go" data-pack="bonus">Ouvrir (${COL.bonus} offert${COL.bonus > 1 ? 's' : ''})</button>`;
+      else if (k === 'leg' && COL.gift_leg > 0) btn = `<button class="buy go" data-pack="leg">🎁 Ouvrir (${COL.gift_leg} offert${COL.gift_leg > 1 ? 's' : ''})</button>`;
       else if (k === 'free') btn = freeReady() ? '<button class="buy go" data-pack="free">Ouvrir gratuitement</button>' : `<button class="buy" disabled id="freeBtn">Dans ${freeLeft()}</button>`;
       else btn = `<button class="buy" data-pack="${k}" ${COL.coins < P.price ? 'disabled' : ''}><span class="coins">${P.price.toLocaleString('fr-FR')}</span></button>`;
-      return `<div class="pshop${k === 'bonus' ? ' pbonus' : ''}"><div class="pk-pack p-${k}"><small>Pack</small><b>${esc(P.n.replace('Pack ', ''))}</b><span>${P.count} carte${P.count > 1 ? 's' : ''}</span></div>
+      return `<div class="pshop${k === 'bonus' || (k === 'leg' && COL.gift_leg > 0) ? ' pbonus' : ''}"><div class="pk-pack p-${k}"><small>Pack</small><b>${esc(P.n.replace('Pack ', ''))}</b><span>${P.count} carte${P.count > 1 ? 's' : ''}</span></div>
         <div style="min-width:0"><h3>${esc(P.n)}</h3><p>${esc(P.txt)}</p><div class="odds">${odds}</div>${btn}</div></div>`;
     }).join('')}</div>
     <p class="hint">Jamais de doublon : un pack ne te donne que des cartes que tu n'as pas encore. Tu gagnes des pièces à chaque match en ligne : victoire 500, nul 250, défaite 120, plus 60 par but. Tous les ${BONUS_EVERY} packs ouverts, un pack bonus est offert.</p>`;
@@ -447,7 +448,7 @@ async function buyPack(type) {
   const { data, error } = await sb.rpc('open_pack', { p_type: type });
   BUSY = false;
   if (error) { const k = Object.keys(PACK_ERR).find(k => (error.message || '').includes(k)); toast(PACK_ERR[k] || 'Ouverture impossible. Vérifie ta connexion.'); await loadCollection(); renderShop(); return; }
-  COL.cards = COL.cards.concat(data.cards); COL.coins = data.coins; COL.packs = data.packs ?? COL.packs + 1; if (data.bonus != null) COL.bonus = data.bonus;
+  COL.cards = COL.cards.concat(data.cards); COL.coins = data.coins; COL.packs = data.packs ?? COL.packs + 1; if (data.bonus != null) COL.bonus = data.bonus; if (data.gift_leg != null) COL.gift_leg = data.gift_leg;
   if (type === 'free') COL.last_free = new Date(Date.now() + clockOffset).toISOString();
   renderShop();
   showPack(type, data.cards, a => {
