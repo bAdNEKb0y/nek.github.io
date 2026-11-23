@@ -33,6 +33,8 @@ export class Room {
   emit(ev, ...a) { (this.handlers[ev] || []).forEach(f => { try { f(...a); } catch (e) { console.error(e); } }); }
 
   async join() {
+    clearInterval(this.pingT);
+    if (this.ch) { try { sb.removeChannel(this.ch); } catch { } this.ch = null; }
     const ch = sb.channel(this.prefix + this.code, { config: { broadcast: { self: false, ack: false }, presence: { key: this.me.uid } } });
     this.ch = ch;
     ch.on('presence', { event: 'sync' }, () => this.onPresence());
@@ -40,14 +42,39 @@ export class Room {
     ch.on('broadcast', { event: 'g' }, ({ payload }) => this.recv(payload));
     await new Promise((res, rej) => {
       const to = setTimeout(() => rej(new Error('timeout')), 12000);
+      let ok = false;
       ch.subscribe(st => {
-        if (st === 'SUBSCRIBED') { clearTimeout(to); res(); }
-        else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') { clearTimeout(to); rej(new Error(st)); }
+        if (st === 'SUBSCRIBED') { ok = true; clearTimeout(to); res(); }
+        else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') {
+          if (!ok) { clearTimeout(to); rej(new Error(st)); }
+          else if (this.ch === ch && !this.closed) this.reconnect(); // la connexion a sauté en cours de route
+        }
       });
     });
     await this.track();
-    this.pingT = setInterval(() => this.send('ping', { t: performance.now() }), 1000);
+    this.lastRecv = performance.now();
+    this.pingT = setInterval(() => {
+      this.send('ping', { t: performance.now() });
+      // plus rien ne passe depuis 6 s alors qu'on avait un adversaire : on se reconnecte
+      if (this.peer && !this.reconnecting && performance.now() - this.lastRecv > 6000) this.reconnect();
+    }, 1000);
   }
+  /** Reconnexion automatique : réessaie sans fin (1 s, 2 s, 4 s… max 5 s) jusqu'à réussir ou qu'on annule */
+  async reconnect() {
+    if (this.reconnecting || this.closed) return;
+    this.reconnecting = true; this.tries = 0; this.resetRTC();
+    this.emit('net', 'retry', 0);
+    while (!this.closed) {
+      await new Promise(r => { this.wakeRetry = r; setTimeout(r, Math.min(5000, 1000 * 2 ** this.tries)); });
+      if (this.closed) break;
+      this.tries++; this.emit('net', 'retry', this.tries);
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) continue;
+      try { await this.join(); this.reconnecting = false; this.emit('net', 'ok'); this.onPresence(); return; } catch { }
+    }
+    this.reconnecting = false;
+  }
+  /** « Réessayer maintenant » : saute l'attente en cours */
+  retryNow() { if (this.reconnecting) this.wakeRetry?.(); else this.reconnect(); }
   track() {
     return this.ch.track({ ...this.state, uid: this.me.uid, name: this.me.name, rating: this.me.rating, role: this.role, at: this.joinedAt ||= Date.now() });
   }
@@ -159,7 +186,7 @@ export class Room {
     this.emit('msg', msg.k, msg.d);
   }
   async leave() {
-    this.closed = true; clearInterval(this.pingT);
+    this.closed = true; clearInterval(this.pingT); this.wakeRetry?.();
     this.resetRTC();
     if (this.ch) { try { await this.ch.untrack(); } catch { } sb.removeChannel(this.ch); this.ch = null; }
   }

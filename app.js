@@ -171,11 +171,18 @@ $('#bQuick').addEventListener('click', async () => {
   const tile = $('#bQuick');
   if (QM) { QM.cancel(); QM = null; tile.classList.remove('searching'); $('#quickTxt').textContent = 'Trouve un adversaire au hasard'; return; }
   tile.classList.add('searching'); $('#quickTxt').textContent = 'Recherche d\'un adversaire… (touche pour annuler)';
-  QM = quickMatch({ uid: ME.id, name: ME.display });
-  try {
-    const r = await QM; QM = null; tile.classList.remove('searching'); $('#quickTxt').textContent = 'Trouve un adversaire au hasard';
-    enterRoom(r.code, r.role);
-  } catch { QM = null; tile.classList.remove('searching'); $('#homeErr').textContent = 'Impossible de rejoindre la recherche. Vérifie ta connexion.'; }
+  for (let tries = 0; ; tries++) {
+    const q = QM = quickMatch({ uid: ME.id, name: ME.display });
+    try {
+      const r = await q; if (QM !== q) return; QM = null; tile.classList.remove('searching'); $('#quickTxt').textContent = 'Trouve un adversaire au hasard';
+      enterRoom(r.code, r.role); return;
+    } catch {
+      if (QM !== q) return; // annulé pendant ce temps
+      $('#quickTxt').textContent = `Connexion perdue, nouvel essai (${tries + 1})… touche pour annuler`;
+      await new Promise(r => setTimeout(r, Math.min(5000, 1000 * 2 ** tries)));
+      if (QM !== q) return;
+    }
+  }
 });
 $('#bCreate').addEventListener('click', () => { audio(); enterRoom(newCode(), 'host'); });
 $('#joinForm').addEventListener('submit', e => {
@@ -488,6 +495,7 @@ async function enterRoom(code, role) {
   room.on('msg', onRoomMsg);
   $('#roomCode').textContent = code;
   renderLobby(); show('lobby');
+  room.on('net', (st, n) => { if (ROOM !== room || GAME) return; const el = $('#netPill'); if (st === 'retry') { el.textContent = n ? `Reconnexion… (essai ${n})` : 'Reconnexion…'; el.className = 'netpill bad'; } else renderNet(room.linkInfo()); });
   try { await room.join(); renderNet(room.linkInfo()); }
   catch { if (ROOM === room) { toast('Connexion à la salle impossible. Vérifie ta connexion.'); leaveRoom(); } return; }
   // invité arrivé dans une salle vide : le créateur est sûrement parti
@@ -1052,7 +1060,8 @@ function frame(now) {
     if (g.host) {
       // Hôte (ou solo) : fait tourner la simulation
       const peerMissing = g.online && !g.multi && !ROOM?.peer;
-      if (peerMissing) { g.peerGoneAt ||= now; if (now - g.peerGoneAt > 15000) g.forfeit(true, 'Ton adversaire s\'est déconnecté.'); }
+      if (peerMissing && selfOffline()) g.peerGoneAt = now; // c'est moi qui ai perdu la connexion : on attend
+      if (peerMissing) { g.peerGoneAt ||= now; if (now - g.peerGoneAt > 20000) g.forfeit(true, 'Ton adversaire s\'est déconnecté.'); }
       else g.peerGoneAt = 0;
       if (!paused && !peerMissing) {
         g.acc += dt;
@@ -1074,7 +1083,7 @@ function frame(now) {
       if (key !== g.lastSent || now - g.sentAt > 60) { ROOM?.send('i', { ...mine, s: g.slot }, true); g.lastSent = key; g.sentAt = now; }
       g.V = interp(g.snaps, now) || g.V;
       predictOwn(g, mine, dt, now, ROOM?.rtt);
-      if (now - g.lastSnapAt > 15000 && !ROOM?.peer) g.forfeit(true, g.multi ? 'L\'hôte s\'est déconnecté : match arrêté.' : 'Ton adversaire s\'est déconnecté.');
+      if (now - g.lastSnapAt > 20000 && !ROOM?.peer && !selfOffline()) g.forfeit(true, g.multi ? 'L\'hôte s\'est déconnecté : match arrêté.' : 'Ton adversaire s\'est déconnecté.');
       if (g.V?.end && !g.endTimer) g.endTimer = setTimeout(() => { if (!g.done) finishGame({ score: g.V.sc, partial: true }); }, 3000);
     }
     if (g.V) g.rec?.push(g.V, now); // enregistrement du replay
@@ -1098,9 +1107,10 @@ function frame(now) {
     for (const q of g.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 300 * dt; q.rot += dt * 6; q.life -= dt; }
     g.parts = g.parts.filter(q => q.life > 0);
     let overlay = null;
-    if (g.online && !g.host && now - g.lastSnapAt > 2500) overlay = 'Connexion perdue… reconnexion';
-    if (g.online && !g.multi && g.host && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
-    if (g.online && !g.host && !ROOM?.peer && g.V) overlay = g.multi ? `${g.cfg.pn?.[0] || 'L\'hôte'} s'est déconnecté…` : `${g.names[0]} s'est déconnecté…`;
+    const lost = g.online && (selfOffline() || (!g.host && now - g.lastSnapAt > 2500 && !!ROOM?.peer));
+    updateNetOv(lost);
+    if (!lost && g.online && !g.multi && g.host && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
+    if (!lost && g.online && !g.host && !ROOM?.peer && g.V) overlay = g.multi ? `${g.cfg.pn?.[0] || 'L\'hôte'} s'est déconnecté…` : `${g.names[0]} s'est déconnecté…`;
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
     const rp = replayFrame(g, now);
     if (SET.saver && (g.fr = (g.fr || 0) + 1) % 2) { requestAnimationFrame(frame); return; } // économie : 30 images/s
@@ -1117,6 +1127,30 @@ $('#bSound')?.addEventListener('click', () => { setSound(!soundOn()); soundLabel
 function openMenu() { soundLabel(); $('#menu').hidden = false; $('#bQuit').textContent = GAME?.online ? 'Abandonner le match' : 'Quitter l\'entraînement'; }
 $('#bResume').addEventListener('click', () => { $('#menu').hidden = true; });
 $('#bFull').addEventListener('click', () => { goFull(); $('#menu').hidden = true; });
+/* ---------- Connexion perdue : reconnexion automatique + bouton Annuler ---------- */
+const NETOV = (() => {
+  const d = document.createElement('div'); d.className = 'netov'; d.hidden = true; d.setAttribute('role', 'alertdialog');
+  d.innerHTML = `<div class="netbox"><div class="netspin" aria-hidden="true"></div><b>Connexion perdue</b><span class="nettxt">Reconnexion…</span>
+    <div class="netbtns"><button class="btn small primary" data-n="retry">Réessayer</button><button class="btn small" data-n="cancel">Annuler</button></div></div>`;
+  $('#game').appendChild(d);
+  d.querySelector('[data-n=retry]').onclick = () => { audio(); ROOM?.retryNow(); };
+  d.querySelector('[data-n=cancel]').onclick = () => { audio(); d.hidden = true; quitOnline(); };
+  return d;
+})();
+let netTxt = '';
+function updateNetOv(lost) {
+  if (NETOV.hidden !== !lost) NETOV.hidden = !lost;
+  if (!lost) return;
+  const t = !navigator.onLine ? 'Pas de réseau sur ton téléphone. On réessaie dès qu\'il revient…' : ROOM?.tries ? `Nouvelle tentative n°${ROOM.tries}…` : 'Reconnexion…';
+  if (t !== netTxt) { netTxt = t; NETOV.querySelector('.nettxt').textContent = t; }
+}
+const selfOffline = () => !navigator.onLine || !!ROOM?.reconnecting;
+addEventListener('online', () => ROOM?.retryNow());
+function quitOnline() {
+  if (!GAME) { leaveRoom(); renderHome(); show('home'); return; }
+  try { ROOM?.send('quit', { host: GAME.host, s: GAME.slot }); } catch { }
+  GAME.forfeit(false, GAME.multi ? 'Tu as quitté le match.' : 'Tu as abandonné le match (connexion perdue).');
+}
 $('#bQuit').addEventListener('click', () => {
   $('#menu').hidden = true;
   if (!GAME) return;
@@ -1133,7 +1167,7 @@ function noteOf(p, score) {
 }
 async function finishGame(sum) {
   const g = GAME; if (!g || g.done) return;
-  g.done = true; clearTimeout(g.endTimer); stopReplay(g); crowdStop(); clearReacts(g);
+  g.done = true; clearTimeout(g.endTimer); stopReplay(g); crowdStop(); clearReacts(g); updateNetOv(false);
   try { wake?.release(); } catch { }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
   const me = g.side, op = 1 - me, M = g.M, sc = sum.score || [0, 0];
