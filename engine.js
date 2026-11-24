@@ -388,6 +388,21 @@ function humanControl(G, s, I, dt) {
   else steer(c, 0, 0, dt);
 
   if (own === c) {
+    // Feinte au joystick : un brusque changement de direction près d'un défenseur efface le joueur
+    c.skillCd = Math.max(0, (c.skillCd || 0) - dt);
+    if (mag > .6) {
+      const nx = I.jx / I.mag, ny = I.jy / I.mag;
+      if (c.jdx != null && c.skillCd <= 0 && nx * c.jdx + ny * c.jdy < -.15 && G.state === 'play') {
+        const def = G.byTeam[1 - t].find(o => !o.gk && dist(o, c) < 5.2);
+        if (def) {
+          c.skillCd = 1.1; b.protect = Math.max(b.protect, .55);
+          const sp = maxSp(G, c) * 1.12; c.vx = nx * sp; c.vy = ny * sp; c.fx = nx; c.fy = ny;
+          if (dist(def, c) < 3.4 && Math.random() < .55 + (T(G, c).pas - T(G, def).def) / 100) def.stun = Math.max(def.stun, .45); // il se fait prendre par la feinte
+          ev(G, 'skill', { t });
+        }
+      }
+      c.jdx = nx; c.jdy = ny; c.jT = 0;
+    } else if ((c.jT = (c.jT || 0) + dt) > .25) c.jdx = null; // joystick lâché trop longtemps : pas de feinte
     // Assistance au tir : près du but, quand on galère et qu'une fenêtre s'ouvre, ça tire tout seul
     const vsBots = !G.hum?.[1 - t]; // contre l'ordi, l'aide est un peu plus généreuse
     const help = G.cfg.assist?.[s] ? (vsBots ? 2 : 1) : 0;

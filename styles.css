@@ -945,3 +945,6 @@ body.ingame .toast.show{transform:translate(-50%,0)}
 .netbox .nettxt{color:var(--muted);font-size:14px}
 .netbtns{display:flex;gap:10px;margin-top:4px}
 .netspin{width:34px;height:34px;border-radius:50%;border:4px solid rgba(255,255,255,.15);border-top-color:var(--flood);animation:spin 1s linear infinite}
+/* Feinte réussie */
+.skillpop{position:absolute;z-index:4;transform:translate(-50%,-150%);pointer-events:none;font-family:var(--f-display);font-weight:800;font-size:20px;color:#ffe08a;text-shadow:0 2px 0 #0b1411,0 0 12px rgba(255,224,138,.8);animation:skillPop .9s ease-out forwards;white-space:nowrap}
+@keyframes skillPop{0%{opacity:0;transform:translate(-50%,-80%) scale(.5) rotate(-6deg)}20%{opacity:1;transform:translate(-50%,-170%) scale(1.15) rotate(-4deg)}100%{opacity:0;transform:translate(-50%,-260%) scale(1) rotate(-4deg)}}

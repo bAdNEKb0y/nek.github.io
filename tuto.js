@@ -18,7 +18,7 @@ const STEPS = [
     art: `<svg viewBox="0 0 320 170" aria-hidden="true"><rect width="320" height="170" rx="14" fill="#13201a"/>
       <g transform="translate(160 85)"><rect x="-38" y="-62" width="76" height="124" rx="12" fill="none" stroke="${W}" stroke-width="5"><animateTransform attributeName="transform" type="rotate" values="0;0;-90;-90;0" keyTimes="0;.3;.5;.85;1" dur="3s" repeatCount="indefinite"/></rect></g>
       <text x="160" y="160" text-anchor="middle" font-size="14" font-weight="800" fill="${Y}" font-family="sans-serif">PAYSAGE</text></svg>` },
-  { t: 'Se déplacer', d: 'Pose ton pouce n\'importe où sur la moitié gauche de l\'écran et fais-le glisser : c\'est ton joystick. Tu contrôles le joueur entouré.',
+  { t: 'Se déplacer', d: 'Pose ton pouce n\'importe où sur la moitié gauche de l\'écran et fais-le glisser : c\'est ton joystick. Tu contrôles le joueur entouré. Feinte : près d\'un défenseur, tire brusquement le joystick dans l\'autre sens pour l\'effacer.',
     art: pitch(`${player(190, 90, 10, Y, true)}${ball(204, 90)}<circle cx="70" cy="120" r="30" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.35)" stroke-width="2"/>
       <circle cx="84" cy="112" r="13" fill="${Y}"><animate attributeName="cx" values="70;88;70" dur="1.6s" repeatCount="indefinite"/><animate attributeName="cy" values="120;108;120" dur="1.6s" repeatCount="indefinite"/></circle>
       <path d="M210 90 h40" stroke="${Y}" stroke-width="3" stroke-dasharray="5 5" marker-end="url(#ar)"/><defs><marker id="ar" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="${Y}"/></marker></defs>`) },

@@ -57,6 +57,15 @@ function playEvent(type, val) {
   else if (type === 'bicycle') { SND.bicycle(); buzz([30, 30, 60]); }
   else if (type === 'cross') SND.cross();
   else if (type === 'chip') { SND.chip(); buzz([15, 20, 25]); }
+  else if (type === 'skill') { SND.whoosh?.(); SND.dribble?.(); buzz(20); }
+}
+/** Petit texte « FEINTE ! » qui jaillit au-dessus du joueur */
+function skillPop(g) {
+  if (!g?.V) return;
+  const o = g.V.b?.[3]; const pp = o >= 0 && g.V.p[o] ? g.V.p[o] : [g.V.b[0], g.V.b[1]];
+  const [x, y] = R.toScreen(pp[0], pp[1]), el = document.createElement('div');
+  el.className = 'skillpop'; el.textContent = ['FEINTE !', 'CROCHET !', 'EFFACÉ !', 'ROULETTE !'][Math.random() * 4 | 0];
+  el.style.left = x + 'px'; el.style.top = y + 'px'; $('#game').appendChild(el); setTimeout(() => el.remove(), 900);
 }
 // petit clic sur les boutons des menus
 document.addEventListener('click', e => { if (e.target.closest('button') && !e.target.closest('#game')) { audio(); SND.click(); } }, true);
@@ -1101,6 +1110,7 @@ function frame(now) {
         g.lastEv = s; playEvent(type, val);
         if (type === 'goal') { g.parts.push(...R.goalBurst(val, g.M)); startReplay(g, now); }
         if (type === 'bicycle' || type === 'volley') g.parts.push(...R.burstAt(g.V, g.M));
+        if (type === 'skill') { g.parts.push(...R.burstAt(g.V, g.M).slice(0, 14)); skillPop(g); }
         if (type === 'kick' && val >= 1.1) g.parts.push(...R.grassAt(g.V));
       }
     }
