@@ -619,7 +619,7 @@ function defendCarrier(G, p, o, dt) {
   const danger = 1 - toGoalOf(o.t, o.y) / FL; // 1 = le porteur est devant notre but
   const human = isCtrl(G, o);
   // distance de garde : un « chien » colle, un « rocher » laisse de l'air ; plus près quand ça devient dangereux
-  let gap = (2.1 + (1 - m.aggr) * 2.4 + (human ? .8 : 0)) * (danger > .72 ? .72 : 1); // face à un vrai joueur, un peu plus d'air
+  let gap = (2.1 + (1 - m.aggr) * 2.4 + (human ? .1 : 0)) * (danger > .72 ? .72 : 1); // face à un vrai joueur, un peu plus d'air
   // loin de notre but, les joueurs patients ne montent pas presser : ils attendent dans le bloc
   if (danger < .4 && m.aggr < .6) gap = Math.max(gap, 7 + (1 - m.aggr) * 5);
   const tx = o.x + ux * gap + o.vx * .22, ty = o.y + uy * gap + o.vy * .22;
