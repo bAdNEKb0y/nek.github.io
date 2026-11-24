@@ -29,7 +29,7 @@ export const DEF = {
   ball: 'classic',  // ballon : classic / gold / fire / retro / neon
   ctrlA: 1,         // opacité des commandes tactiles en match
   radar: true,      // mini-carte du terrain en bas de l'écran
-  skills: true,     // dribbles et feintes au joystick
+  skills: false,    // dribbles et feintes au joystick (désactivés de base)
 };
 let S = { ...DEF };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { }

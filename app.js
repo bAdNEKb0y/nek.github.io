@@ -311,7 +311,7 @@ const SETUI = [
   ]],
 ];
 function renderSettings() {
-  const el = $('#settings');
+  const el = $('#settings'), keepY = el.querySelector('.setbox')?.scrollTop || 0; // on garde la position : pas de retour tout en haut
   el.innerHTML = `<div class="box setbox"><div class="cardhead"><h2>Paramètres</h2><button class="link" data-x="close">Fermer</button></div>
     <div class="setprev" aria-hidden="true"><canvas width="300" height="90" id="setPrevCv"></canvas></div>
     ${SETUI.map(([sec, rows]) => `<section class="setsec"><h3>${sec}</h3>${rows.map(([k, lab, opt, hint]) => `<div class="setrow"><div class="setlab">${lab}${hint ? `<small>${hint}</small>` : ''}</div>${opt === 'range'
@@ -327,6 +327,7 @@ function renderSettings() {
   el.querySelector('[data-x=reset]').onclick = () => { resetSettings(); renderSettings(); toast('Paramètres remis par défaut.'); };
   el.querySelector('[data-x=tuto]').onclick = () => { closeSettings(); openTuto(); };
   renderPushRow(); bindInstall(el); drawSetPreview();
+  const box = el.querySelector('.setbox'); if (box && keepY) box.scrollTop = keepY;
 }
 /** Aperçu de la pelouse et du ballon choisis */
 function drawSetPreview() {
