@@ -976,3 +976,9 @@ body.ingame .toast.show{transform:translate(-50%,0)}
 .rcard.t-leg{background:linear-gradient(160deg,#fff8dc,#e6c25a);border-color:#fff}
 .rcard.t-goat{background:linear-gradient(160deg,#ff5fd2,#7c3aed);color:#fff;border-color:#fff}
 .rcard.t-secret{background:radial-gradient(circle at 50% 25%,#3a2f0a,#0b0a06 75%);color:#ffd23f;border-color:#ffd23f;box-shadow:0 0 24px rgba(255,210,63,.9)}
+/* Chevilles cassées : étoiles qui tournent au-dessus du joueur effacé */
+.dizzy .dz{position:absolute;left:-30px;top:-58px;width:60px;height:30px;animation:dzSpin .8s linear infinite}
+.dizzy .dz i{position:absolute;font-style:normal;font-size:16px}
+.dizzy .dz i:nth-child(1){left:0;top:8px}.dizzy .dz i:nth-child(2){left:22px;top:0}.dizzy .dz i:nth-child(3){left:44px;top:8px}
+.dizzy .dzt{position:absolute;left:0;top:-86px;transform:translateX(-50%);white-space:nowrap;font-family:var(--f-display);font-size:18px;color:#ff8fd8;text-shadow:0 2px 0 #0b1411,0 0 10px rgba(255,95,210,.8);animation:skillPop 1.6s ease-out forwards}
+@keyframes dzSpin{to{transform:rotate(360deg)}}

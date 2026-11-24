@@ -305,6 +305,42 @@ function chip(G, p, aim) {
   const xl = b.x + Math.cos(a) * D; if (Math.abs(xl - CX) < GH) G.stats.onT[p.t]++;
   b.spec = 'chip'; ev(G, 'chip', {}); banner(G, 'PIQUÉ !', p.name, .9, p.t); G.passTarget = null;
 }
+/** Le défenseur est effacé ; si c'est un vrai joueur, grosse animation chez tout le monde */
+function beat(G, c, def, stun) {
+  def.stun = Math.max(def.stun, isCtrl(G, def) ? stun * 1.5 : stun);
+  if (isCtrl(G, def)) ev(G, 'ankles', { t: G.players.indexOf(def) });
+}
+/** Gestes techniques : direction du coup sec par rapport au défenseur le plus proche */
+function dribbleMove(G, c, dx, dy) {
+  const b = G.ball; let def = null, dd = 6.5;
+  for (const o of G.byTeam[1 - c.t]) if (!o.gk && dist(o, c) < dd) { dd = dist(o, c); def = o; }
+  if (!def) return false;
+  const n = hyp(dx, dy) || 1; dx /= n; dy /= n;
+  const tx = (def.x - c.x) / (dd || 1), ty = (def.y - c.y) / (dd || 1), toward = dx * tx + dy * ty;
+  const skill = (T(G, c).pas + pb(G, c) - T(G, def).def) / 100; // un joueur technique réussit plus souvent
+  c.skillCd = 1.4;
+  if (toward > .55) {
+    // PETIT PONT : le ballon passe entre les jambes, on le récupère derrière
+    const sp = 8 + dd * .9; // juste assez pour passer derrière lui, pas plus
+    c.st.pas++; b.owner = null; b.vx = tx * sp; b.vy = ty * sp; b.z = 0; b.vz = 0; b.last = c; b.lift = .45; b.spec = '';
+    G.passTarget = c; G.passT = 1.4; c.kcd = .3;
+    if (Math.random() < .7 + skill) beat(G, c, def, .7); else def.stun = 0; // raté : il peut le récupérer
+    c.vx = tx * maxSp(G, c); c.vy = ty * maxSp(G, c);
+    ev(G, 'skill', { t: 2 }); return true;
+  }
+  if (toward < -.45) {
+    // ROULETTE : on tourne autour du ballon, impossible à prendre pendant un instant
+    b.protect = Math.max(b.protect, .9); const side = (dx * ty - dy * tx) > 0 ? 1 : -1;
+    c.vx = -ty * side * maxSp(G, c) * .9; c.vy = tx * side * maxSp(G, c) * .9; c.fx = -ty * side; c.fy = tx * side;
+    if (dd < 3.6 && Math.random() < .55 + skill) beat(G, c, def, .55);
+    ev(G, 'skill', { t: 3 }); return true;
+  }
+  // CROCHET : décalage sec sur le côté
+  b.protect = Math.max(b.protect, .6);
+  c.vx = dx * maxSp(G, c) * 1.18; c.vy = dy * maxSp(G, c) * 1.18; c.fx = dx; c.fy = dy;
+  if (dd < 4 && Math.random() < .6 + skill) beat(G, c, def, .5);
+  ev(G, 'skill', { t: 1 }); return true;
+}
 function tackle(G, p) {
   if (p.tcd > 0 || p.stun > 0) return;
   p.tcd = .6;
@@ -394,15 +430,17 @@ function humanControl(G, s, I, dt) {
   if (own === c) {
     // Feinte au joystick : un brusque changement de direction près d'un défenseur efface le joueur
     c.skillCd = Math.max(0, (c.skillCd || 0) - dt);
+    // Geste technique au « coup sec » de joystick (petit pont, crochet, roulette)
+    if (I.skill && !I.noSkill && c.skillCd <= 0 && G.state === 'play' && dribbleMove(G, c, I.skx, I.sky)) return;
     if (mag > .6) {
       const nx = I.jx / I.mag, ny = I.jy / I.mag;
-      if (c.jdx != null && c.skillCd <= 0 && nx * c.jdx + ny * c.jdy < -.15 && G.state === 'play') {
+      if (!I.noSkill && c.jdx != null && c.skillCd <= 0 && nx * c.jdx + ny * c.jdy < -.15 && G.state === 'play') {
         const def = G.byTeam[1 - t].find(o => !o.gk && dist(o, c) < 5.2);
         if (def) {
           c.skillCd = 1.1; b.protect = Math.max(b.protect, .55);
           const sp = maxSp(G, c) * 1.12; c.vx = nx * sp; c.vy = ny * sp; c.fx = nx; c.fy = ny;
-          if (dist(def, c) < 3.4 && Math.random() < .55 + (T(G, c).pas - T(G, def).def) / 100) def.stun = Math.max(def.stun, .45); // il se fait prendre par la feinte
-          ev(G, 'skill', { t });
+          if (dist(def, c) < 3.4 && Math.random() < .55 + (T(G, c).pas - T(G, def).def) / 100) beat(G, c, def, .45); // il se fait prendre par la feinte
+          ev(G, 'skill', { t: 0 });
         }
       }
       c.jdx = nx; c.jdy = ny; c.jT = 0;

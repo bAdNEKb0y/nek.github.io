@@ -58,13 +58,23 @@ function playEvent(type, val) {
   else if (type === 'cross') SND.cross();
   else if (type === 'chip') { SND.chip(); buzz([15, 20, 25]); }
   else if (type === 'skill') { SND.whoosh?.(); SND.dribble?.(); buzz(20); }
+  else if (type === 'ankles') { SND.whoosh?.(); SND.dribble?.(); SND.ole?.(); buzz([30, 30, 60]); }
+}
+/** Un vrai joueur vient de se faire effacer : il tourne sur lui-même, étoiles au-dessus de la tête */
+function dizzy(g, pi) {
+  if (!g || !Number.isInteger(pi)) return;
+  g.reacts ||= [];
+  const el = document.createElement('div'); el.className = 'rbub dizzy';
+  el.innerHTML = '<div class="dz"><i>⭐</i><i>💫</i><i>⭐</i></div><b class="dzt">CHEVILLES CASSÉES !</b>';
+  reactLayer().appendChild(el);
+  g.reacts.push({ slot: -1, pi, i: -1, t0: performance.now(), el, life: 1600 });
 }
 /** Petit texte « FEINTE ! » qui jaillit au-dessus du joueur */
-function skillPop(g) {
+function skillPop(g, kind) {
   if (!g?.V) return;
   const o = g.V.b?.[3]; const pp = o >= 0 && g.V.p[o] ? g.V.p[o] : [g.V.b[0], g.V.b[1]];
   const [x, y] = R.toScreen(pp[0], pp[1]), el = document.createElement('div');
-  el.className = 'skillpop'; el.textContent = ['FEINTE !', 'CROCHET !', 'EFFACÉ !', 'ROULETTE !'][Math.random() * 4 | 0];
+  el.className = 'skillpop'; el.textContent = kind === 2 ? 'PETIT PONT !' : kind === 3 ? 'ROULETTE !' : kind === 1 ? 'CROCHET !' : ['FEINTE !', 'EFFACÉ !', 'QUEL GESTE !'][Math.random() * 3 | 0];
   el.style.left = x + 'px'; el.style.top = y + 'px'; $('#game').appendChild(el); setTimeout(() => el.remove(), 900);
 }
 // petit clic sur les boutons des menus
@@ -278,6 +288,7 @@ const SETUI = [
   ]],
   ['Affichage', [
     ['cam', 'Caméra', [['near', 'Proche'], ['wide', 'Tout le terrain']]],
+    ['skills', 'Dribbles et feintes', [[true, 'Activés'], [false, 'Désactivés']], 'Coup sec du joystick près d\'un défenseur : petit pont (vers lui), crochet (sur le côté), roulette (en arrière). Changement brusque de direction : feinte.'],
     ['radar', 'Mini-carte du terrain', [[true, 'Affichée'], [false, 'Cachée']], 'Petit plan en bas de l\'écran : où sont tous les joueurs et le ballon'],
     ['labels', 'Noms des joueurs', [[true, 'Oui'], [false, 'Non']]],
     ['aim', 'Cible des ballons en l\'air', [[true, 'Oui'], [false, 'Non']]],
@@ -370,7 +381,8 @@ $('#bShop').addEventListener('click', () => { audio(); openShop(); });
 let DRAFT = null;
 function openClub() {
   if (!COL) return;
-  DRAFT = { name: COL.team.name, kit: COL.team.kit, slots: COL.team.slots.slice() };
+  const T0 = COL.team || {}; // compte tout neuf : équipe vide par défaut
+  DRAFT = { name: T0.name || 'Mon équipe', kit: T0.kit || 'C1', slots: (T0.slots || [null, null, null, null, null]).slice() };
   $('#tName').value = DRAFT.name; $('#clubErr').textContent = '';
   renderClub(); show('club');
 }
@@ -735,7 +747,7 @@ function placeReacts(g, V, now) {
   if (!g.reacts?.length) return;
   g.reacts = g.reacts.filter(r => { if (now - r.t0 > r.life) { r.el.remove(); return false; } return true; });
   for (const r of g.reacts) {
-    const pi = V?.c?.[r.slot], p = pi != null && pi >= 0 ? V.p[pi] : null;
+    const pi = r.pi ?? V?.c?.[r.slot], p = pi != null && pi >= 0 ? V?.p?.[pi] : null;
     if (!p) { r.el.style.opacity = '0'; continue; }
     const [x, y] = R.toScreen(p[0], p[1]);
     r.el.style.opacity = ''; r.el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
@@ -905,6 +917,7 @@ function updJoy() {
   // Réponse plus nette : petite zone morte au centre, pleine vitesse dès 80 % du rayon
   const m = Math.min(1, Math.hypot(dx, dy) / Rr), k = m < .1 ? 0 : Math.min(1, (m - .1) / .7) / (m || 1);
   LI.tx = dx / Rr * k; LI.ty = dy / Rr * k;
+  if (LI.joyOn && !LI.flicked && m > .85 && performance.now() - LI.joyT < 160) { LI.flicked = true; LI.sk = (LI.sk || 0) + 1; LI.skx = dx / Rr; LI.sky = dy / Rr; }
 }
 let cvRect = null; // position du terrain gardée en mémoire (évite de la recalculer à chaque mouvement du doigt)
 function xy(e) { const r = cvRect || (cvRect = cv.getBoundingClientRect()); return [e.clientX - r.left, e.clientY - r.top]; }
@@ -920,7 +933,7 @@ cv.addEventListener('pointerdown', e => {
   try { cv.setPointerCapture(e.pointerId); } catch { }
   if (k === 'B') { LI.bDown = true; LI.b++; }
   else if (k === 'A') aPress();
-  else { LI.joyOn = true; LI.jox = LI.jlx = x; LI.joy = LI.jly = y; updJoy(); }
+  else { LI.joyOn = true; LI.joyT = performance.now(); LI.flicked = false; LI.jox = LI.jlx = x; LI.joy = LI.jly = y; updJoy(); }
 });
 cv.addEventListener('pointermove', e => {
   if (ptrs.get(e.pointerId) !== 'J') return; e.preventDefault();
@@ -990,15 +1003,17 @@ function localWorldInput() {
   let v = LI.ty + PAD.y + ((KEYS.KeyS || KEYS.ArrowDown) ? 1 : 0) - ((KEYS.KeyW || KEYS.ArrowUp) ? 1 : 0);
   const m = Math.hypot(u, v); if (m > 1) { u /= m; v /= m; }
   const [jx, jy] = R.toWorld(u, v);
-  return { jx, jy, m: Math.min(1, m), a: LI.a, l: LI.l, b: LI.b, d: LI.bDown, r: LI.rel, rc: LI.relCharge };
+  const [sx, sy] = LI.sk ? R.toWorld(LI.skx, LI.sky) : [0, 0];
+  return { jx, jy, m: Math.min(1, m), a: LI.a, l: LI.l, b: LI.b, d: LI.bDown, r: LI.rel, rc: LI.relCharge, k: LI.sk || 0, kx: sx, ky: sy, nf: SET.skills === false ? 1 : 0 };
 }
 /** Transforme un état d'entrée (compteurs) en fronts pour le moteur */
 function toEngine(raw, prev) {
   if (!raw) return blankInput();
   const I = { jx: raw.jx || 0, jy: raw.jy || 0, mag: clamp(raw.m || 0, 0, 1), bDown: !!raw.d, relCharge: clamp(raw.rc || 0, 0, 1),
-    a: raw.a > prev.a, lob: (raw.l || 0) > (prev.l || 0), b: raw.b > prev.b, rel: raw.r > prev.r };
+    a: raw.a > prev.a, lob: (raw.l || 0) > (prev.l || 0), b: raw.b > prev.b, rel: raw.r > prev.r,
+    skill: (raw.k || 0) > (prev.k || 0), skx: +raw.kx || 0, sky: +raw.ky || 0, noSkill: !!raw.nf };
   if (I.mag > 0 && Math.hypot(I.jx, I.jy) > 0) { const n = Math.hypot(I.jx, I.jy); I.jx = I.jx / n * I.mag; I.jy = I.jy / n * I.mag; }
-  prev.a = raw.a; prev.l = raw.l || 0; prev.b = raw.b; prev.r = raw.r;
+  prev.a = raw.a; prev.l = raw.l || 0; prev.b = raw.b; prev.r = raw.r; prev.k = raw.k || 0;
   return I;
 }
 
@@ -1144,7 +1159,8 @@ function frame(now) {
         g.lastEv = s; playEvent(type, val);
         if (type === 'goal') { g.parts.push(...R.goalBurst(val, g.M)); startReplay(g, now); }
         if (type === 'bicycle' || type === 'volley') g.parts.push(...R.burstAt(g.V, g.M));
-        if (type === 'skill') { g.parts.push(...R.burstAt(g.V, g.M).slice(0, 14)); skillPop(g); }
+        if (type === 'skill') { g.parts.push(...R.burstAt(g.V, g.M).slice(0, 14)); skillPop(g, val); }
+        if (type === 'ankles') dizzy(g, val);
         if (type === 'kick' && val >= 1.1) g.parts.push(...R.grassAt(g.V));
       }
     }
