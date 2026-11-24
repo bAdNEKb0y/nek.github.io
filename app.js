@@ -300,7 +300,7 @@ const SETUI = [
   ]],
   ['Affichage', [
     ['cam', 'Caméra', [['near', 'Proche'], ['wide', 'Tout le terrain']]],
-    ['skills', 'Dribbles et feintes', [[true, 'Activés'], [false, 'Désactivés']], 'Coup sec du joystick près d\'un défenseur : petit pont (vers lui), crochet (sur le côté), roulette (en arrière). Changement brusque de direction : feinte.'],
+    ['skills', 'Dribbles et feintes', [[true, 'Activés'], [false, 'Désactivés']], 'Près d\'un défenseur, tire le joystick loin d\'un coup : vers lui = petit pont, sur le côté = crochet, en arrière = roulette. Un changement brusque de direction = feinte.'],
     ['radar', 'Mini-carte du terrain', [[true, 'Affichée'], [false, 'Cachée']], 'Petit plan en bas de l\'écran : où sont tous les joueurs et le ballon'],
     ['labels', 'Noms des joueurs', [[true, 'Oui'], [false, 'Non']]],
     ['aim', 'Cible des ballons en l\'air', [[true, 'Oui'], [false, 'Non']]],
@@ -930,7 +930,14 @@ function updJoy() {
   // Réponse plus nette : petite zone morte au centre, pleine vitesse dès 80 % du rayon
   const m = Math.min(1, Math.hypot(dx, dy) / Rr), k = m < .1 ? 0 : Math.min(1, (m - .1) / .7) / (m || 1);
   LI.tx = dx / Rr * k; LI.ty = dy / Rr * k;
-  if (LI.joyOn && !LI.flicked && m > .85 && performance.now() - LI.joyT < 160) { LI.flicked = true; LI.sk = (LI.sk || 0) + 1; LI.skx = dx / Rr; LI.sky = dy / Rr; }
+  // Geste technique : on tire le joystick LOIN d'un coup (le doigt parcourt 1,5 fois le rayon en moins de 0,18 s)
+  if (LI.joyOn) {
+    const now = performance.now(), H = LI.jh || (LI.jh = []);
+    H.push([now, LI.jlx, LI.jly]); while (H.length > 2 && now - H[1][0] > 180) H.shift(); // on garde la position d'avant le geste
+    const base = H[0], fx = LI.jlx - base[1], fy = LI.jly - base[2], far = Math.hypot(fx, fy);
+    if (!LI.flicked && far > Rr * 1.5) { LI.flicked = true; LI.sk = (LI.sk || 0) + 1; LI.skx = fx / far; LI.sky = fy / far; }
+    else if (LI.flicked && far < Rr * .4) LI.flicked = false; // le doigt s'est calmé : on peut refaire un geste
+  }
 }
 let cvRect = null; // position du terrain gardée en mémoire (évite de la recalculer à chaque mouvement du doigt)
 function xy(e) { const r = cvRect || (cvRect = cv.getBoundingClientRect()); return [e.clientX - r.left, e.clientY - r.top]; }
@@ -946,7 +953,7 @@ cv.addEventListener('pointerdown', e => {
   try { cv.setPointerCapture(e.pointerId); } catch { }
   if (k === 'B') { LI.bDown = true; LI.b++; }
   else if (k === 'A') aPress();
-  else { LI.joyOn = true; LI.joyT = performance.now(); LI.flicked = false; LI.jox = LI.jlx = x; LI.joy = LI.jly = y; updJoy(); }
+  else { LI.joyOn = true; LI.jh = []; LI.flicked = false; LI.jox = LI.jlx = x; LI.joy = LI.jly = y; updJoy(); }
 });
 cv.addEventListener('pointermove', e => {
   if (ptrs.get(e.pointerId) !== 'J') return; e.preventDefault();
