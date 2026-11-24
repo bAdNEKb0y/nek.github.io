@@ -28,6 +28,7 @@ export const DEF = {
   pitch: 'classic', // pelouse : classic / checker / night / snow / street
   ball: 'classic',  // ballon : classic / gold / fire / retro / neon
   ctrlA: 1,         // opacité des commandes tactiles en match
+  radar: true,      // mini-carte du terrain en bas de l'écran
 };
 let S = { ...DEF };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { }

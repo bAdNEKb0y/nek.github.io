@@ -364,6 +364,28 @@ export function createRenderer(canvas) {
     ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
   }
 
+  /** Mini-carte en bas au centre : tout le terrain d'un coup d'œil (utile avec la caméra proche) */
+  function drawRadar(V, M) {
+    const w = Math.min(140, R.W * .17), h = w * FW / FL, x0 = (R.W - w) / 2, y0 = R.H - h - Math.max(8, R.H * .025);
+    const mx = (x, y) => x0 + (R.me === 0 ? (FL - y) : y) / FL * w, my = (x, y) => y0 + (R.me === 0 ? x : FW - x) / FW * h;
+    ctx.save(); ctx.globalAlpha = .82;
+    ctx.fillStyle = 'rgba(8,20,14,.6)'; ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0 + w / 2, y0); ctx.lineTo(x0 + w / 2, y0 + h); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x0 + w / 2, y0 + h / 2, h * .14, 0, Math.PI * 2); ctx.stroke();
+    // zone visible par la caméra
+    if (SET.cam !== 'wide') { const top = (R.hud - R.OY) / R.S, bot = (R.H - R.OY) / R.S; const a = clamp(R.me === 0 ? top : FW - bot, 0, FW), b2 = clamp(R.me === 0 ? bot : FW - top, 0, FW);
+      ctx.strokeStyle = 'rgba(255,224,138,.55)'; ctx.strokeRect(x0 + .5, y0 + a / FW * h, w - 1, Math.max(2, (b2 - a) / FW * h)); }
+    const ctl = V.c?.[R.slot] ?? -1;
+    V.p.forEach((p, i) => {
+      const t = M.players?.[i]?.t ?? (i < 5 ? 0 : 1), kit = M.kit?.[t];
+      ctx.fillStyle = (M.players?.[i]?.gk ? (t ? '#b07cff' : '#2dd4a0') : kit?.c1) || '#fff';
+      ctx.beginPath(); ctx.arc(mx(p[0], p[1]), my(p[0], p[1]), i === ctl ? 3.6 : 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = i === ctl ? '#ffe08a' : 'rgba(0,0,0,.6)'; ctx.lineWidth = i === ctl ? 1.6 : .8; ctx.stroke();
+    });
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(mx(V.b[0], V.b[1]), my(V.b[0], V.b[1]), 2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   function drawHUD(V, M, ui) {
     const h = R.hud, me = R.me, op = 1 - me;
     const bgr = ctx.createLinearGradient(0, 0, 0, h);
@@ -570,6 +592,7 @@ export function createRenderer(canvas) {
     drawBanner(V, M);
     if (ui.replay) drawReplay(V);
     drawHUD(V, M, ui);
+    if (!ui.replay && SET.radar !== false) drawRadar(V, M);
     if (!ui.replay) { ctx.save(); ctx.globalAlpha = SET.ctrlA ?? 1; drawControls(V, M, ui); ctx.restore(); }
     if (ui.overlay) {
       ctx.fillStyle = 'rgba(6,12,10,.7)'; ctx.fillRect(0, R.hud, R.W, R.H - R.hud);

@@ -278,6 +278,7 @@ const SETUI = [
   ]],
   ['Affichage', [
     ['cam', 'Caméra', [['near', 'Proche'], ['wide', 'Tout le terrain']]],
+    ['radar', 'Mini-carte du terrain', [[true, 'Affichée'], [false, 'Cachée']], 'Petit plan en bas de l\'écran : où sont tous les joueurs et le ballon'],
     ['labels', 'Noms des joueurs', [[true, 'Oui'], [false, 'Non']]],
     ['aim', 'Cible des ballons en l\'air', [[true, 'Oui'], [false, 'Non']]],
     ['shake', 'Écran qui tremble sur les buts', [[true, 'Oui'], [false, 'Non']]],

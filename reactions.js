@@ -102,14 +102,15 @@ function openWheel() {
   const wheel = $('#emoWheel'), btn = $('#emoBtn'), list = equipped(), n = list.length;
   const r = btn.getBoundingClientRect(), g = $('#game').getBoundingClientRect();
   const cx = r.left - g.left + r.width / 2, cy = r.top - g.top + r.height / 2;
-  const small = g.height < 440, R = small ? 96 : 112, a0 = Math.PI * .5, a1 = Math.PI * 1.05; // arc vers la gauche et le bas
+  const small = g.height < 440, step = small ? 50 : 58, cols = Math.min(4, n);
+  // Rangée(s) en haut à gauche du bouton : loin du joystick (à gauche en bas) et de PASSE / TIR (à droite en bas)
   wheel.style.setProperty('--cx', cx + 'px'); wheel.style.setProperty('--cy', cy + 'px');
   wheel.innerHTML = list.map((i, k) => {
-    const rad = n > 1 ? a0 + (a1 - a0) * k / (n - 1) : a0, ring = k % 2 ? R * .62 : R; // deux rangées pour que tout tienne
-    return `<button class="emo-it r-${EMOTES[i].r}" data-emo="${i}" aria-label="${emoteName(i)}" style="--x:${Math.round(Math.cos(rad) * ring)}px;--y:${Math.round(Math.sin(rad) * ring)}px;--d:${k * 20}ms">${emoteHTML(i, small ? 36 : 42)}</button>`;
+    const col = k % cols, row = k / cols | 0, x = -(col + 1) * step - 6, y = row * step;
+    return `<button class="emo-it r-${EMOTES[i].r}" data-emo="${i}" aria-label="${emoteName(i)}" style="--x:${x}px;--y:${y}px;--d:${k * 20}ms">${emoteHTML(i, small ? 34 : 40)}</button>`;
   }).join('');
   wheel.hidden = false; btn.classList.add('open');
-  clearTimeout(wheelT); wheelT = setTimeout(closeWheel, 5000); // se referme tout seul
+  clearTimeout(wheelT); wheelT = setTimeout(closeWheel, 3500); // se referme tout seul
 }
 export function closeWheel() { clearTimeout(wheelT); const w = $('#emoWheel'); if (w) { w.hidden = true; w.innerHTML = ''; } $('#emoBtn')?.classList.remove('open'); }
 function pick(i) {
