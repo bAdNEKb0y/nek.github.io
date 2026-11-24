@@ -184,16 +184,28 @@ async function renderHome() {
 }
 $('#bRefresh').addEventListener('click', async () => { ME = await loadProfile() || ME; renderHome(); });
 
-let QM = null;
+let QM = null, qmTick = 0;
+const BOT_AFTER = 25; // secondes sans vrai joueur avant de proposer un match contre l'ordi
+function stopQuickUI() { clearInterval(qmTick); $('#bQuick').classList.remove('searching'); $('#quickTxt').textContent = 'Trouve un adversaire au hasard'; }
 $('#bQuick').addEventListener('click', async () => {
   audio();
   const tile = $('#bQuick');
-  if (QM) { QM.cancel(); QM = null; tile.classList.remove('searching'); $('#quickTxt').textContent = 'Trouve un adversaire au hasard'; return; }
+  if (QM) { QM.cancel(); QM = null; stopQuickUI(); return; }
   tile.classList.add('searching'); $('#quickTxt').textContent = 'Recherche d\'un adversaire… (touche pour annuler)';
+  // Personne au bout de 25 s : on joue contre l'ordi pour ne pas attendre
+  const t0 = performance.now(); clearInterval(qmTick);
+  qmTick = setInterval(() => {
+    if (!QM) { clearInterval(qmTick); return; }
+    const left = Math.ceil(BOT_AFTER - (performance.now() - t0) / 1000);
+    if (left > 0) { $('#quickTxt').textContent = `Recherche d'un vrai joueur… match contre l'ordi dans ${left} s (touche pour annuler)`; return; }
+    QM.cancel(); QM = null; stopQuickUI();
+    toast('Personne de disponible pour l\'instant : match contre l\'ordi !');
+    if (!tutoSeen()) openTuto(startSolo); else startSolo();
+  }, 500);
   for (let tries = 0; ; tries++) {
     const q = QM = quickMatch({ uid: ME.id, name: ME.display });
     try {
-      const r = await q; if (QM !== q) return; QM = null; tile.classList.remove('searching'); $('#quickTxt').textContent = 'Trouve un adversaire au hasard';
+      const r = await q; if (QM !== q) return; QM = null; stopQuickUI();
       enterRoom(r.code, r.role); return;
     } catch {
       if (QM !== q) return; // annulé pendant ce temps
