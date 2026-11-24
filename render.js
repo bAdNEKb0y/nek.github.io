@@ -40,7 +40,7 @@ export function createRenderer(canvas) {
   R.resize = () => {
     const r = canvas.getBoundingClientRect();
     R.W = Math.max(200, r.width); R.H = Math.max(160, r.height);
-    R.DPR = SET.saver ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    R.DPR = SET.saver ? 1 : Math.min(window.devicePixelRatio || 1, R.lowQ ? 1.25 : 2); // R.lowQ : téléphone qui rame, on dessine moins de pixels
     const cw = Math.round(R.W * R.DPR), ch = Math.round(R.H * R.DPR);
     if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; } // pas de réallocation inutile (mémoire des vieux iPhone)
     R.hud = R.H < 420 ? 40 : 52;

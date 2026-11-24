@@ -19,9 +19,13 @@ export const MINDS = {
   artiste:  { n: "L'Artiste",   aggr: .3,  pat: .5,  vision: .65, flair: .95 }, // feintes et crochets
   renard:   { n: 'Le Renard',   aggr: .45, pat: .6,  vision: .55, flair: .6 },  // malin devant le but
 };
-function pickMind(i) {
-  const pool = i <= 2 ? ['rocher', 'rocher', 'chien', 'stratege'] : ['artiste', 'renard', 'chien', 'stratege', 'renard'];
-  return pool[Math.random() * pool.length | 0];
+/** Comportement selon le poste, comme dans un vrai match : défenseurs patients et bien placés,
+ *  l'attaquant de pointe presse la relance, l'ailier tente des dribbles. Un peu de variété selon la note. */
+function pickMind(i, r) {
+  if (i === 1) return 'rocher';                                  // défenseur central : reste entre l'attaquant et le but
+  if (i === 2) return Math.random() < .5 ? 'stratege' : 'rocher'; // latéral : lit le jeu, coupe les passes
+  if (i === 3) return r >= 86 && Math.random() < .6 ? 'artiste' : 'renard'; // ailier : dribble s'il est technique
+  return Math.random() < .55 ? 'chien' : 'renard';                // avant-centre : presse la relance adverse
 }
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -71,7 +75,7 @@ export function createMatch(cfg) {
   for (let t = 0; t < 2; t++) for (let i = 0; i < 5; i++) {
     const sq = team[t].sq[i];
     const p = { t, i, gk: i === 0, num: sq[1], name: sq[0], r: clamp(sq[2], 30, 99), disp: sq[2], sp: sq[3]?.sp || null, hair: sq[3]?.hair || null, st: { but: 0, tir: 0, pas: 0, vol: 0, arr: 0 },
-      x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: dirOf(t), kcd: 0, tcd: 0, stun: 0, holdT: 0, aiT: Math.random() * .4, ox: 0, oy: 0, offT: 0, mind: i ? pickMind(i) : 'rocher', jockT: 0, feintT: 0, feintX: 0 };
+      x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: dirOf(t), kcd: 0, tcd: 0, stun: 0, holdT: 0, aiT: Math.random() * .4, ox: 0, oy: 0, offT: 0, mind: i ? pickMind(i, sq[2]) : 'rocher', jockT: 0, feintT: 0, feintX: 0 };
     G.players.push(p); G.byTeam[t].push(p);
   }
   setupKickoff(G, 0, true);
@@ -601,7 +605,10 @@ function aiField(G, p, dt) {
     return;
   }
   if (!gkHas && G.cover[p.t] === p && !ourLob) { const gy = ownY(p.t); moveTo(G, p, b.x * .7 + CX * .3, b.y + (gy - b.y) * .35, .9, dt); return; }
-  const h = homeTarget(G, p, false); moveTo(G, p, h[0], h[1], .8, dt);
+  const h = homeTarget(G, p, false);
+  // Pas d'essaim : seul le premier défenseur va au contact, les autres restent à distance du porteur
+  if (own && own.t !== p.t) { const dx = h[0] - own.x, dy = h[1] - own.y, dd = hyp(dx, dy) || 1, min = 8.5; if (dd < min) { h[0] = own.x + dx / dd * min; h[1] = own.y + dy / dd * min; } }
+  moveTo(G, p, h[0], h[1], .8, dt);
 }
 const M_ = p => MINDS[p.mind] || MINDS.rocher;
 /** Le défenseur le plus proche se place entre le porteur et le but, recule avec lui, et choisit son moment pour tacler */
@@ -612,7 +619,7 @@ function defendCarrier(G, p, o, dt) {
   const danger = 1 - toGoalOf(o.t, o.y) / FL; // 1 = le porteur est devant notre but
   const human = isCtrl(G, o);
   // distance de garde : un « chien » colle, un « rocher » laisse de l'air ; plus près quand ça devient dangereux
-  let gap = (2.1 + (1 - m.aggr) * 2.4) * (danger > .72 ? .72 : 1);
+  let gap = (2.1 + (1 - m.aggr) * 2.4 + (human ? .8 : 0)) * (danger > .72 ? .72 : 1); // face à un vrai joueur, un peu plus d'air
   // loin de notre but, les joueurs patients ne montent pas presser : ils attendent dans le bloc
   if (danger < .4 && m.aggr < .6) gap = Math.max(gap, 7 + (1 - m.aggr) * 5);
   const tx = o.x + ux * gap + o.vx * .22, ty = o.y + uy * gap + o.vy * .22;
@@ -641,6 +648,7 @@ function coverCarrier(G, p, o, dt) {
     if (s2 > ts) { ts = s2; threat = q; }
   }
   if (threat) { const k = .35 + m.vision * .3; tx = tx * (1 - k) + (threat.x * .7 + o.x * .3) * k; ty = ty * (1 - k) + (threat.y * .75 + o.y * .25) * k; }
+  const dx = tx - o.x, dy = ty - o.y, dd = hyp(dx, dy) || 1; if (dd < 7) { tx = o.x + dx / dd * 7; ty = o.y + dy / dd * 7; }
   moveTo(G, p, clamp(tx, 3, FW - 3), clamp(ty, 2, FL - 2), .9, dt);
 }
 function aiPlayer(G, p, dt) {

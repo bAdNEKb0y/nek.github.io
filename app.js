@@ -5,7 +5,7 @@ import { PAD, initPad, pollPad, rumble, padLabels } from './gamepad.js';
 import { SET, onSetting, resetSettings } from './settings.js';
 import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundOn, setSound } from './sound.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
-import { MINDS, createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
+import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL, PITCHES, BALLS } from './render.js';
 import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList, inviteToRoom, isOnline } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
@@ -901,11 +901,16 @@ function updJoy() {
   const g = R.ctrl, Rr = g.jr;
   let dx = LI.jlx - LI.jox, dy = LI.jly - LI.joy; const d = Math.hypot(dx, dy);
   if (d > Rr) { LI.jox = LI.jlx - dx / d * Rr; LI.joy = LI.jly - dy / d * Rr; dx = dx / d * Rr; dy = dy / d * Rr; }
-  LI.klx = dx; LI.kly = dy; LI.tx = dx / Rr; LI.ty = dy / Rr;
+  LI.klx = dx; LI.kly = dy;
+  // Réponse plus nette : petite zone morte au centre, pleine vitesse dès 80 % du rayon
+  const m = Math.min(1, Math.hypot(dx, dy) / Rr), k = m < .1 ? 0 : Math.min(1, (m - .1) / .7) / (m || 1);
+  LI.tx = dx / Rr * k; LI.ty = dy / Rr * k;
 }
-function xy(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+let cvRect = null; // position du terrain gardée en mémoire (évite de la recalculer à chaque mouvement du doigt)
+function xy(e) { const r = cvRect || (cvRect = cv.getBoundingClientRect()); return [e.clientX - r.left, e.clientY - r.top]; }
+addEventListener('resize', () => { cvRect = null; }); addEventListener('fdp-viewport', () => { cvRect = null; });
 cv.addEventListener('pointerdown', e => {
-  e.preventDefault(); audio();
+  e.preventDefault(); audio(); cvRect = cv.getBoundingClientRect();
   if (!document.fullscreenElement && matchMedia('(pointer:coarse)').matches) goFull();
   if (GAME?.replay && performance.now() >= GAME.replay.start) { stopReplay(GAME); return; }
   const [x, y] = xy(e), k = hit(x, y);
@@ -917,7 +922,11 @@ cv.addEventListener('pointerdown', e => {
   else if (k === 'A') aPress();
   else { LI.joyOn = true; LI.jox = LI.jlx = x; LI.joy = LI.jly = y; updJoy(); }
 });
-cv.addEventListener('pointermove', e => { if (ptrs.get(e.pointerId) !== 'J') return; e.preventDefault(); const [x, y] = xy(e); LI.jlx = x; LI.jly = y; updJoy(); });
+cv.addEventListener('pointermove', e => {
+  if (ptrs.get(e.pointerId) !== 'J') return; e.preventDefault();
+  const ev = e.getCoalescedEvents?.().at?.(-1) || e; // dernière position connue du doigt
+  const [x, y] = xy(ev); LI.jlx = x; LI.jly = y; updJoy();
+});
 function up(e) {
   const k = ptrs.get(e.pointerId); if (!k) return; ptrs.delete(e.pointerId);
   if (k === 'J') { LI.joyOn = false; LI.tx = LI.ty = 0; LI.klx = LI.kly = 0; }
@@ -1080,8 +1089,11 @@ function replayFrame(g, now) {
 }
 let last = performance.now();
 const STEP = 1 / 60;
+let ftAvg = 16, slowT = 0;
 function frame(now) {
   const dt = Math.min(.1, (now - last) / 1000); last = now;
+  // Anti-lag : si le téléphone n'arrive pas à suivre pendant 2 s, on baisse un peu la résolution du terrain
+  if (GAME && !GAME.done && !R.lowQ && !SET.saver) { ftAvg = ftAvg * .95 + dt * 1000 * .05; slowT = ftAvg > 24 ? slowT + dt : 0; if (slowT > 2) { R.lowQ = true; R.resize(); } }
   pollPad(now);
   const g = GAME;
   if (g && !g.done) {
@@ -1141,7 +1153,7 @@ function frame(now) {
     let overlay = null;
     const lost = g.online && (selfOffline() || (!g.host && now - g.lastSnapAt > 2500 && !!ROOM?.peer));
     updateNetOv(lost);
-    if (!lost && g.online && !g.multi && g.host && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 15 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
+    if (!lost && g.online && !g.multi && g.host && !ROOM?.peer) overlay = `${g.names[1]} s'est déconnecté… ${Math.max(0, 20 - Math.floor((now - g.peerGoneAt) / 1000))} s`;
     if (!lost && g.online && !g.host && !ROOM?.peer && g.V) overlay = g.multi ? `${g.cfg.pn?.[0] || 'L\'hôte'} s'est déconnecté…` : `${g.names[0]} s'est déconnecté…`;
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
     const rp = replayFrame(g, now);
@@ -1249,7 +1261,7 @@ function renderEnd(g, sum, rating) {
     const tot = (t, k) => P.filter(p => p.t === t).reduce((a, p) => a + p.st[k], 0);
     const row = (lab, a, b) => { const s = a + b || 1; return `<div class="srow"><span>${a}</span><div class="mid">${lab}<i><b style="width:${a / s * 100}%;background:${M.kit[me].c1}"></b><b style="width:${b / s * 100}%;background:${M.kit[op].c1}"></b></i></div><span>${b}</span></div>`; };
     $('#endStats').innerHTML = row('Possession %', poss[me], poss[op]) + row('Tirs', S.shots[me], S.shots[op]) + row('Tirs cadrés', S.onT[me], S.onT[op]) + row('Passes', tot(me, 'pas'), tot(op, 'pas')) + row('Ballons volés', tot(me, 'vol'), tot(op, 'vol'));
-    $('#endLineups').innerHTML = [me, op].map(t => `<div class="lu"><h3>${esc(M.team[t].short)}</h3>${P.filter(p => p.t === t).map(p => { const c = p.gk ? '#2dd4a0' : M.kit[t].c1; return `<div class="pl"><span class="no" style="background:${c};color:${pickText(c)}">${p.num}</span><span class="pn">${esc(p.name)} <small>${POS[p.i]}${p.mind && MINDS[p.mind] && !g.humans?.[p.t] ? ' · ' + MINDS[p.mind].n : ''}${p.st.but ? ' · ' + p.st.but + ' but' + (p.st.but > 1 ? 's' : '') : ''}</small></span><b class="note ${p.n >= 8 ? 'hi' : p.n < 5.5 ? 'lo' : ''}">${p.n.toFixed(1)}</b></div>`; }).join('')}</div>`).join('');
+    $('#endLineups').innerHTML = [me, op].map(t => `<div class="lu"><h3>${esc(M.team[t].short)}</h3>${P.filter(p => p.t === t).map(p => { const c = p.gk ? '#2dd4a0' : M.kit[t].c1; return `<div class="pl"><span class="no" style="background:${c};color:${pickText(c)}">${p.num}</span><span class="pn">${esc(p.name)} <small>${POS[p.i]}${p.st.but ? ' · ' + p.st.but + ' but' + (p.st.but > 1 ? 's' : '') : ''}</small></span><b class="note ${p.n >= 8 ? 'hi' : p.n < 5.5 ? 'lo' : ''}">${p.n.toFixed(1)}</b></div>`; }).join('')}</div>`).join('');
     $('#endStats').hidden = false;
   } else { $('#endMvp').innerHTML = ''; $('#endStats').hidden = true; $('#endLineups').innerHTML = ''; }
   const acts = $('#endActions'); acts.innerHTML = '';
