@@ -5,7 +5,7 @@ import { PAD, initPad, pollPad, rumble, padLabels } from './gamepad.js';
 import { SET, onSetting, resetSettings } from './settings.js';
 import { audio, tone, cheer, S as SND, crowdStart, crowdStop, crowdLevel, soundOn, setSound } from './sound.js';
 import { $, esc, shirtSVG, cardHTML, lockedHTML, showPack, initPackOverlay, setPackSounds } from './ui.js';
-import { createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
+import { MINDS, createMatch, step, snapshot, summary, blankInput, pickKits, FL, FW } from './engine.js';
 import { createRenderer, pickText, SIDE_COL, PITCHES, BALLS } from './render.js';
 import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closeProfile, openChat, closeChat, openTrades, closeTrade, kitOf, saveReplay, shareReplayPicker, friendsList, inviteToRoom, isOnline } from './social.js';
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
@@ -1217,7 +1217,7 @@ function renderEnd(g, sum, rating) {
     const tot = (t, k) => P.filter(p => p.t === t).reduce((a, p) => a + p.st[k], 0);
     const row = (lab, a, b) => { const s = a + b || 1; return `<div class="srow"><span>${a}</span><div class="mid">${lab}<i><b style="width:${a / s * 100}%;background:${M.kit[me].c1}"></b><b style="width:${b / s * 100}%;background:${M.kit[op].c1}"></b></i></div><span>${b}</span></div>`; };
     $('#endStats').innerHTML = row('Possession %', poss[me], poss[op]) + row('Tirs', S.shots[me], S.shots[op]) + row('Tirs cadrés', S.onT[me], S.onT[op]) + row('Passes', tot(me, 'pas'), tot(op, 'pas')) + row('Ballons volés', tot(me, 'vol'), tot(op, 'vol'));
-    $('#endLineups').innerHTML = [me, op].map(t => `<div class="lu"><h3>${esc(M.team[t].short)}</h3>${P.filter(p => p.t === t).map(p => { const c = p.gk ? '#2dd4a0' : M.kit[t].c1; return `<div class="pl"><span class="no" style="background:${c};color:${pickText(c)}">${p.num}</span><span class="pn">${esc(p.name)} <small>${POS[p.i]}${p.st.but ? ' · ' + p.st.but + ' but' + (p.st.but > 1 ? 's' : '') : ''}</small></span><b class="note ${p.n >= 8 ? 'hi' : p.n < 5.5 ? 'lo' : ''}">${p.n.toFixed(1)}</b></div>`; }).join('')}</div>`).join('');
+    $('#endLineups').innerHTML = [me, op].map(t => `<div class="lu"><h3>${esc(M.team[t].short)}</h3>${P.filter(p => p.t === t).map(p => { const c = p.gk ? '#2dd4a0' : M.kit[t].c1; return `<div class="pl"><span class="no" style="background:${c};color:${pickText(c)}">${p.num}</span><span class="pn">${esc(p.name)} <small>${POS[p.i]}${p.mind && MINDS[p.mind] && !g.humans?.[p.t] ? ' · ' + MINDS[p.mind].n : ''}${p.st.but ? ' · ' + p.st.but + ' but' + (p.st.but > 1 ? 's' : '') : ''}</small></span><b class="note ${p.n >= 8 ? 'hi' : p.n < 5.5 ? 'lo' : ''}">${p.n.toFixed(1)}</b></div>`; }).join('')}</div>`).join('');
     $('#endStats').hidden = false;
   } else { $('#endMvp').innerHTML = ''; $('#endStats').hidden = true; $('#endLineups').innerHTML = ''; }
   const acts = $('#endActions'); acts.innerHTML = '';

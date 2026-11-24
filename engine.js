@@ -11,6 +11,18 @@ export const DIFF = [
   { name: 'Costaud', react: .22, speed: 1.04, tack: 1.3, gk: .07, shoot: 1.15 },
 ];
 const MATE_AI = { react: .35, speed: .97, tack: .85, gk: 0, shoot: 1 };
+/** Esprits de joueurs : chaque joueur de l'ordi a son caractère (agressivité, patience, vision, gestes techniques) */
+export const MINDS = {
+  chien:    { n: 'Le Chien',    aggr: .9,  pat: .25, vision: .45, flair: .35 }, // presse haut, colle au porteur
+  rocher:   { n: 'Le Rocher',   aggr: .55, pat: .85, vision: .5,  flair: .2 },  // attend la faute, ne se jette pas
+  stratege: { n: 'Le Stratège', aggr: .35, pat: .8,  vision: .95, flair: .35 }, // garde le bloc, coupe les passes, joue simple
+  artiste:  { n: "L'Artiste",   aggr: .3,  pat: .5,  vision: .65, flair: .95 }, // feintes et crochets
+  renard:   { n: 'Le Renard',   aggr: .45, pat: .6,  vision: .55, flair: .6 },  // malin devant le but
+};
+function pickMind(i) {
+  const pool = i <= 2 ? ['rocher', 'rocher', 'chien', 'stratege'] : ['artiste', 'renard', 'chien', 'stratege', 'renard'];
+  return pool[Math.random() * pool.length | 0];
+}
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const hyp = Math.hypot;
@@ -59,7 +71,7 @@ export function createMatch(cfg) {
   for (let t = 0; t < 2; t++) for (let i = 0; i < 5; i++) {
     const sq = team[t].sq[i];
     const p = { t, i, gk: i === 0, num: sq[1], name: sq[0], r: clamp(sq[2], 30, 99), disp: sq[2], sp: sq[3]?.sp || null, hair: sq[3]?.hair || null, st: { but: 0, tir: 0, pas: 0, vol: 0, arr: 0 },
-      x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: dirOf(t), kcd: 0, tcd: 0, stun: 0, holdT: 0, aiT: Math.random() * .4, ox: 0, oy: 0, offT: 0 };
+      x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: dirOf(t), kcd: 0, tcd: 0, stun: 0, holdT: 0, aiT: Math.random() * .4, ox: 0, oy: 0, offT: 0, mind: i ? pickMind(i) : 'rocher', jockT: 0, feintT: 0, feintX: 0 };
     G.players.push(p); G.byTeam[t].push(p);
   }
   setupKickoff(G, 0, true);
@@ -497,9 +509,17 @@ function aiOwner(G, p, dt) {
       if (tg < 9) { const back = bestPassTarget(G, p, true); if (back) { passTo(G, p, back); return; } }
     }
     // 3. Sous pression : on donne (même en retrait)
-    if (nd < 4 && Math.random() < .7) { const m = bestPassTarget(G, p, true); if (m) { passTo(G, p, m); return; } }
+    const mm = M_(p);
+    if (nd < 4 && Math.random() < .45 + mm.vision * .35 - mm.flair * .2) { const m = bestPassTarget(G, p, true); if (m) { passTo(G, p, m); return; } }
     // 4. Passe qui fait avancer le jeu (dans la course d'un partenaire)
-    if (Math.random() < .22) { const m = bestPassTarget(G, p, false); if (m && (m.y - p.y) * d > 8) { passTo(G, p, m, { through: m.vy * d > 6 }); return; } }
+    if (Math.random() < .12 + mm.vision * .2) { const m = bestPassTarget(G, p, false); if (m && (m.y - p.y) * d > 8) { passTo(G, p, m, { through: m.vy * d > 6 }); return; } }
+  }
+  const m = M_(p);
+  // Feinte / crochet : l'« artiste » efface son défenseur d'un changement de direction
+  if (p.feintT > 0) { p.feintT -= dt; moveTo(G, p, clamp(p.x + p.feintX * 6, 3, FW - 3), p.y + d * 3.5, 1.08, dt); return; }
+  if (near && nd < 3.3 && (near.y - p.y) * d > -.5 && Math.random() < m.flair * dt * 2.2) {
+    p.feintT = rnd(.28, .42); p.feintX = p.x > near.x ? 1 : -1; if (Math.random() < .3) p.feintX *= -1;
+    G.ball.protect = Math.max(G.ball.protect, .18 + m.flair * .12); return;
   }
   // Conduite : un ailier remonte son couloir, un axial va vers le but en évitant le défenseur
   let tx, ty = gy;
@@ -556,6 +576,9 @@ function aiField(G, p, dt) {
   const gkHas = own && own.gk;
   if (!own && b.cross && G.passPt && G.passTarget && G.passTarget.t !== p.t && !p.gk && p.i <= 2 && G.cover[p.t] !== p) { moveTo(G, p, G.passPt[0], G.passPt[1], 1, dt); return; }
   const ourLob = G.land && G.passTarget && G.passTarget.t === p.t && G.passTarget !== p; // notre passe en l'air : seul le receveur y va
+  if (!gkHas && G.chaser[p.t] === p && !ourLob && own && own.t !== p.t) { defendCarrier(G, p, own, dt); return; }
+  if (!gkHas && G.cover[p.t] === p && !ourLob && own && own.t !== p.t) { coverCarrier(G, p, own, dt); return; }
+  p.jockT = 0;
   if (!gkHas && G.chaser[p.t] === p && !ourLob) {
     const q = G.land || [b.x + b.vx * .3, b.y + b.vy * .3];
     moveTo(G, p, q[0], q[1], G.land ? 1 : G.hum[p.t] ? .85 : 1, dt);
@@ -564,6 +587,46 @@ function aiField(G, p, dt) {
   }
   if (!gkHas && G.cover[p.t] === p && !ourLob) { const gy = ownY(p.t); moveTo(G, p, b.x * .7 + CX * .3, b.y + (gy - b.y) * .35, .9, dt); return; }
   const h = homeTarget(G, p, false); moveTo(G, p, h[0], h[1], .8, dt);
+}
+const M_ = p => MINDS[p.mind] || MINDS.rocher;
+/** Le défenseur le plus proche se place entre le porteur et le but, recule avec lui, et choisit son moment pour tacler */
+function defendCarrier(G, p, o, dt) {
+  const A = G.ai[p.t], m = M_(p), gy = ownY(p.t), b = G.ball;
+  const gx = CX + clamp((o.x - CX) * .35, -GH, GH); // on protège le but, pas le milieu du terrain
+  let ux = gx - o.x, uy = gy - o.y; const L = hyp(ux, uy) || 1; ux /= L; uy /= L;
+  const danger = 1 - toGoalOf(o.t, o.y) / FL; // 1 = le porteur est devant notre but
+  const human = isCtrl(G, o);
+  // distance de garde : un « chien » colle, un « rocher » laisse de l'air ; plus près quand ça devient dangereux
+  let gap = (2.1 + (1 - m.aggr) * 2.4) * (danger > .72 ? .72 : 1);
+  // loin de notre but, les joueurs patients ne montent pas presser : ils attendent dans le bloc
+  if (danger < .4 && m.aggr < .6) gap = Math.max(gap, 7 + (1 - m.aggr) * 5);
+  const tx = o.x + ux * gap + o.vx * .22, ty = o.y + uy * gap + o.vy * .22;
+  const d = dist(p, o), far = d > gap + 3.5;
+  moveTo(G, p, tx, ty, far ? 1 : .82, dt);
+  if (!far) { p.fx = (o.x - p.x) / (d || 1); p.fy = (o.y - p.y) / (d || 1); } // il regarde le porteur
+  p.jockT += dt;
+  if (d > 3.4 || p.tcd > 0) return;
+  p.aiT -= dt; if (p.aiT > 0) return;
+  p.aiT = A.react * rnd(.7, 1.3);
+  const slow = hyp(o.vx, o.vy) < 4; // le porteur hésite ou se retourne : c'est le moment
+  const beaten = (o.y - p.y) * dirOf(o.t) > .4; // il est en train de me passer : dernière chance
+  const wait = clamp(p.jockT / (.6 + m.pat * 1.6), 0, 1); // plus on a patienté, plus on ose
+  let ch = (.06 + m.aggr * .18 + wait * .22 + (slow ? .16 : 0) + (beaten ? .2 : 0) + danger * .12) * A.tack;
+  if (human && G.cfg.assist) ch *= .9;
+  if (Math.random() < ch) { p.jockT = 0; tackle(G, p); }
+}
+/** Le deuxième défenseur couvre : derrière le premier, et il surveille l'attaquant le plus dangereux */
+function coverCarrier(G, p, o, dt) {
+  const gy = ownY(p.t), m = M_(p);
+  let tx = o.x * .55 + CX * .45, ty = o.y + (gy - o.y) * .45;
+  let threat = null, ts = -1e9;
+  for (const q of G.byTeam[o.t]) {
+    if (q === o || q.gk) continue;
+    const s2 = -toGoalOf(o.t, q.y) * .6 - Math.abs(q.x - CX) * .3;
+    if (s2 > ts) { ts = s2; threat = q; }
+  }
+  if (threat) { const k = .35 + m.vision * .3; tx = tx * (1 - k) + (threat.x * .7 + o.x * .3) * k; ty = ty * (1 - k) + (threat.y * .75 + o.y * .25) * k; }
+  moveTo(G, p, clamp(tx, 3, FW - 3), clamp(ty, 2, FL - 2), .9, dt);
 }
 function aiPlayer(G, p, dt) {
   if (p.stun > 0) { steer(p, 0, 0, dt, 4); return; }
@@ -734,6 +797,6 @@ export function snapshot(G) {
 export function summary(G) {
   return {
     score: G.score, stats: G.stats, scorers: G.scorers,
-    players: G.players.map(p => ({ t: p.t, i: p.i, name: p.name, num: p.num, r: p.disp ?? p.r, gk: p.gk, st: p.st, sp: p.sp, hair: p.hair })),
+    players: G.players.map(p => ({ t: p.t, i: p.i, name: p.name, num: p.num, r: p.disp ?? p.r, gk: p.gk, st: p.st, sp: p.sp, hair: p.hair, mind: p.gk ? null : p.mind })),
   };
 }
