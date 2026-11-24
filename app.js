@@ -706,6 +706,7 @@ function onRoomMsg(k, d) {
   }
   if (k.startsWith('d') && onDuelMsg(k, d)) return;
   if (!GAME) return;
+  if (k === 'emoc') { if (d && typeof d.c === 'string' && CARDS[d.c] && Number.isInteger(d.s) && d.s !== GAME.slot) addCardReact(GAME, GAME.multi ? d.s : 1 - GAME.slot, d.c); return; }
   if (k === 'emo') { if (d && Number.isInteger(d.e) && Number.isInteger(d.s) && d.s !== GAME.slot) addReact(GAME, GAME.multi ? d.s : 1 - GAME.slot, d.e); return; }
   if (k === 's' && !GAME.host) GAME.onSnap(d);
   else if (k === 'i' && GAME.host) { const s = GAME.multi ? d.s : 1; if (s > 0 && s < GAME.slots.length) GAME.remotes[s] = d; }
@@ -741,7 +742,27 @@ function placeReacts(g, V, now) {
   }
 }
 function clearReacts(g) { for (const r of g?.reacts || []) r.el.remove(); if (g) g.reacts = []; }
-initReactions({ achievements, onPick: i => { const g = GAME; if (!g || g.done) return; addReact(g, g.slot, i); if (g.online) ROOM?.send('emo', { s: g.slot, e: i }); } });
+initReactions({ achievements, onPick: i => { const g = GAME; if (!g || g.done) return; addReact(g, g.slot, i); if (g.online) ROOM?.send('emo', { s: g.slot, e: i }); },
+  onCard: () => { const g = GAME, id = bestCardId(); if (!g || g.done || !id) return; addCardReact(g, g.slot, id); if (g.online) ROOM?.send('emoc', { s: g.slot, c: id }); } });
+/** Ma meilleure carte : la mieux notée de mon équipe, sinon de toute ma collection */
+function bestCardId() {
+  const pool = (COL?.team?.slots || []).filter(id => id && CARDS[id]);
+  const list = pool.length ? pool : (COL?.cards || []).filter(id => CARDS[id]);
+  return list.sort((a, b) => (CARDS[b].r || 0) - (CARDS[a].r || 0))[0] || null;
+}
+/** Bulle « carte » au-dessus du joueur : mini-carte avec la note, le poste et le nom */
+function addCardReact(g, slot, id) {
+  const c = CARDS[id]; if (!g || !c || !Number.isInteger(slot) || slot < 0 || slot >= g.slots.length) return;
+  if (slot !== g.slot && SET.reacts === 'mine') return;
+  const now = performance.now(); g.reacts ||= [];
+  if (g.reacts.some(r => r.slot === slot && now - r.t0 < 1500)) return;
+  const el = document.createElement('div');
+  el.className = 'rbub big rcardb';
+  el.innerHTML = `<div class="rcard t-${c.tier}"><b>${c.r}</b><i>${esc(c.pos)}</i><span>${esc(c.name)}</span></div>`;
+  reactLayer().appendChild(el);
+  g.reacts.push({ slot, i: -1, t0: now, el, life: 3400 }); if (g.reacts.length > 8) g.reacts.shift().el.remove();
+  if (SET.reactSound) { tone(523, .1, 'triangle', .08, 784); setTimeout(() => tone(988, .16, 'triangle', .08, 1318), 110); }
+}
 /** Hôte d'un match à plusieurs : cet humain est parti ? (l'ordi reprend son joueur) */
 function slotGone(g, s) {
   if (!g.multi) return false;

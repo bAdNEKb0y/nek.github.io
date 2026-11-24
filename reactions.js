@@ -62,12 +62,12 @@ export const emoteName = i => { const m = EMOTES[i]; return m ? (m.n || m.e) : '
 export const MAX_EQUIP = 8, COOLDOWN = 4000;
 export const emoteFor = q => EMOTES.findIndex(x => x.q === q);
 
-let ACH = () => [], ON_PICK = null, coolUntil = 0;
+let ACH = () => [], ON_PICK = null, ON_CARD = null, coolUntil = 0;
 const KEY = 'fdp-emotes2';
 const lsGet = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
 const lsSet = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { } };
 
-export function initReactions({ achievements, onPick }) { ACH = achievements; ON_PICK = onPick; build(); }
+export function initReactions({ achievements, onPick, onCard }) { ACH = achievements; ON_PICK = onPick; ON_CARD = onCard || null; build(); }
 export const isUnlocked = i => { const q = EMOTES[i]?.q; return !q || (ACH() || []).some(a => a.id === q && a.claimed); };
 export function equipped() {
   const unl = EMOTES.map((_, i) => i).filter(isUnlocked);
@@ -92,6 +92,7 @@ function build() {
   for (const ev of ['pointerdown', 'pointerup', 'touchstart']) { btn.addEventListener(ev, stop); wheel.addEventListener(ev, stop); }
   btn.addEventListener('click', e => { e.preventDefault(); if (Date.now() < coolUntil) return; wheel.hidden ? openWheel() : closeWheel(); });
   wheel.addEventListener('click', e => {
+    if (e.target.closest('[data-card]')) { if (Date.now() < coolUntil) return; closeWheel(); startCool('🃏'); ON_CARD?.(); return; }
     const b = e.target.closest('[data-emo]');
     if (b) pick(+b.dataset.emo);
   });
@@ -105,8 +106,10 @@ function openWheel() {
   const small = g.height < 440, step = small ? 50 : 58, cols = Math.min(4, n);
   // Rangée(s) en haut à gauche du bouton : loin du joystick (à gauche en bas) et de PASSE / TIR (à droite en bas)
   wheel.style.setProperty('--cx', cx + 'px'); wheel.style.setProperty('--cy', cy + 'px');
-  wheel.innerHTML = list.map((i, k) => {
-    const col = k % cols, row = k / cols | 0, x = -(col + 1) * step - 6, y = row * step;
+  const all = ON_CARD ? ['card', ...list] : list, cols2 = Math.min(4, all.length);
+  wheel.innerHTML = all.map((i, k) => {
+    const col = k % cols2, row = k / cols2 | 0, x = -(col + 1) * step - 6, y = row * step;
+    if (i === 'card') return `<button class="emo-it emo-card" data-card="1" aria-label="Montrer ma meilleure carte" style="--x:${x}px;--y:${y}px;--d:0ms"><span>🃏</span></button>`;
     return `<button class="emo-it r-${EMOTES[i].r}" data-emo="${i}" aria-label="${emoteName(i)}" style="--x:${x}px;--y:${y}px;--d:${k * 20}ms">${emoteHTML(i, small ? 34 : 40)}</button>`;
   }).join('');
   wheel.hidden = false; btn.classList.add('open');
@@ -116,12 +119,15 @@ export function closeWheel() { clearTimeout(wheelT); const w = $('#emoWheel'); i
 function pick(i) {
   if (!isUnlocked(i) || Date.now() < coolUntil) return;
   closeWheel();
+  startCool(EMOTES[i].a ? emoteHTML(i, 30) : EMOTES[i].e);
+  ON_PICK?.(i);
+}
+function startCool(icon) {
   coolUntil = Date.now() + COOLDOWN;
   const btn = $('#emoBtn');
-  btn.querySelector('span').innerHTML = EMOTES[i].a ? emoteHTML(i, 30) : EMOTES[i].e;
+  btn.querySelector('span').innerHTML = icon;
   btn.classList.remove('cool'); void btn.offsetWidth; btn.classList.add('cool'); // le bouton se rétrécit puis se recharge
   setTimeout(() => { btn.classList.remove('cool'); btn.querySelector('span').textContent = '😀'; }, COOLDOWN);
-  ON_PICK?.(i);
 }
 /** Affiche ou cache le bouton (seulement pendant un match) */
 export function showReactBtn(on) { const b = $('#emoBtn'); if (b) b.hidden = !on; if (!on) closeWheel(); }

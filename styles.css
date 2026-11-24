@@ -948,3 +948,31 @@ body.ingame .toast.show{transform:translate(-50%,0)}
 /* Feinte réussie */
 .skillpop{position:absolute;z-index:4;transform:translate(-50%,-150%);pointer-events:none;font-family:var(--f-display);font-weight:800;font-size:20px;color:#ffe08a;text-shadow:0 2px 0 #0b1411,0 0 12px rgba(255,224,138,.8);animation:skillPop .9s ease-out forwards;white-space:nowrap}
 @keyframes skillPop{0%{opacity:0;transform:translate(-50%,-80%) scale(.5) rotate(-6deg)}20%{opacity:1;transform:translate(-50%,-170%) scale(1.15) rotate(-4deg)}100%{opacity:0;transform:translate(-50%,-260%) scale(1) rotate(-4deg)}}
+/* Réactions en match : jolies pastilles sombres façon verre, couleur selon la rareté */
+.emo-wheel .emo-it{background:radial-gradient(circle at 35% 30%,#2d3b35 0%,#121a16 70%);border:2px solid rgba(255,255,255,.28);box-shadow:0 6px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.18);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.emo-wheel .emo-it.r-r{border-color:#5ad1e6;box-shadow:0 0 14px rgba(90,209,230,.55),0 6px 16px rgba(0,0,0,.45)}
+.emo-wheel .emo-it.r-e{border-color:#a78bfa;background:radial-gradient(circle at 35% 30%,#3a2d63,#15102a 70%);box-shadow:0 0 16px rgba(167,139,250,.7),0 6px 16px rgba(0,0,0,.45)}
+.emo-wheel .emo-it.r-l{border-color:#f3d27a;background:radial-gradient(circle at 35% 30%,#5a4413,#1d1606 70%);box-shadow:0 0 20px rgba(255,214,102,.8),0 6px 16px rgba(0,0,0,.45)}
+.emo-wheel .emo-it.r-u{border-color:#fff;background:conic-gradient(from 0deg,#ff5fd2,#5ad1e6,#ffd23f,#ff5fd2);box-shadow:0 0 24px #ff5fd2}
+.emo-wheel .emo-it:active{transform:translate(var(--x),var(--y)) scale(.86)}
+/* Bulle au-dessus du joueur : même style sombre, plus lisible sur la pelouse */
+.rbub>.emo{background:radial-gradient(circle at 35% 30%,#2d3b35,#121a16 72%);border:2px solid rgba(255,255,255,.35)}
+.rbub>.emo::after{border-top-color:#121a16}
+.rbub>.emo.r-e{background:radial-gradient(circle at 35% 30%,#3a2d63,#15102a 72%)}
+.rbub>.emo.r-l{background:radial-gradient(circle at 35% 30%,#5a4413,#1d1606 72%)}
+/* Bouton réactions : verre sombre, plus discret */
+.emo-btn{background:radial-gradient(circle at 35% 30%,#2d3b35,#0e1512 72%)!important;border:2px solid rgba(255,255,255,.3)!important;box-shadow:0 6px 16px rgba(0,0,0,.45)}
+.emo-wheel .emo-it.emo-card{border-color:#ffd23f;background:radial-gradient(circle at 35% 30%,#4a3a10,#161105 70%);box-shadow:0 0 16px rgba(255,210,63,.7),0 6px 16px rgba(0,0,0,.45)}
+.emo-btn.open{border-color:var(--flood)!important}
+/* Mini-carte envoyée en match */
+.rcardb>.rcard{position:absolute;left:-30px;top:-118px;width:60px;height:82px;border-radius:9px;display:grid;grid-template-rows:auto auto 1fr;justify-items:center;padding:6px 4px 4px;
+  background:linear-gradient(160deg,#f6e3a1,#c9a24a);color:#2a1d05;border:2px solid #fff3c4;box-shadow:0 8px 20px rgba(0,0,0,.5),0 0 18px rgba(255,214,102,.6);
+  animation:rbIn .35s cubic-bezier(.3,1.7,.6,1) both, rbOut .5s ease-in 2.9s forwards}
+.rcard b{font-family:var(--f-display);font-size:24px;line-height:1}
+.rcard i{font-style:normal;font-size:10px;font-weight:800;opacity:.75}
+.rcard span{align-self:end;font-size:10px;font-weight:800;text-align:center;line-height:1.05;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rcard.t-rare{background:linear-gradient(160deg,#ffcf6a,#e08a00)}
+.rcard.t-elite{background:linear-gradient(160deg,#5b3fa8,#24164d);color:#f3d27a;border-color:#a78bfa}
+.rcard.t-leg{background:linear-gradient(160deg,#fff8dc,#e6c25a);border-color:#fff}
+.rcard.t-goat{background:linear-gradient(160deg,#ff5fd2,#7c3aed);color:#fff;border-color:#fff}
+.rcard.t-secret{background:radial-gradient(circle at 50% 25%,#3a2f0a,#0b0a06 75%);color:#ffd23f;border-color:#ffd23f;box-shadow:0 0 24px rgba(255,210,63,.9)}
