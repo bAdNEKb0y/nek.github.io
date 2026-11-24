@@ -982,3 +982,10 @@ body.ingame .toast.show{transform:translate(-50%,0)}
 .dizzy .dz i:nth-child(1){left:0;top:8px}.dizzy .dz i:nth-child(2){left:22px;top:0}.dizzy .dz i:nth-child(3){left:44px;top:8px}
 .dizzy .dzt{position:absolute;left:0;top:-86px;transform:translateX(-50%);white-space:nowrap;font-family:var(--f-display);font-size:18px;color:#ff8fd8;text-shadow:0 2px 0 #0b1411,0 0 10px rgba(255,95,210,.8);animation:skillPop 1.6s ease-out forwards}
 @keyframes dzSpin{to{transform:rotate(360deg)}}
+/* iPhone SE (320 px) : la case du code de salle tient en entier */
+@media (max-width:340px){
+  .joinrow{gap:6px}
+  .joinrow input,#joinCode{min-width:0;width:100%;letter-spacing:.04em;font-size:15px;padding-left:6px;padding-right:6px}
+  .joinrow .btn.small{padding-left:10px;padding-right:10px}
+  .tile{padding-left:12px;padding-right:12px}
+}
