@@ -129,5 +129,15 @@ function startCool(icon) {
   btn.classList.remove('cool'); void btn.offsetWidth; btn.classList.add('cool'); // le bouton se rétrécit puis se recharge
   setTimeout(() => { btn.classList.remove('cool'); btn.querySelector('span').textContent = '😀'; }, COOLDOWN);
 }
+/* Manette : Select ouvre la rangée, chaque nouvel appui passe à la suivante, elle part toute seule 0,9 s après le dernier appui */
+let padSel = -1, padT = 0;
+export function padEmote() {
+  const btn = $('#emoBtn'); if (!btn || btn.hidden || Date.now() < coolUntil) return;
+  const wheel = $('#emoWheel');
+  if (wheel.hidden) { openWheel(); padSel = 0; } else padSel = (padSel + 1) % wheel.children.length;
+  [...wheel.children].forEach((c, k) => c.classList.toggle('padsel', k === padSel));
+  clearTimeout(wheelT); clearTimeout(padT);
+  padT = setTimeout(() => { const it = wheel.children[padSel]; padSel = -1; if (it && !wheel.hidden) it.click(); }, 900);
+}
 /** Affiche ou cache le bouton (seulement pendant un match) */
 export function showReactBtn(on) { const b = $('#emoBtn'); if (b) b.hidden = !on; if (!on) closeWheel(); }

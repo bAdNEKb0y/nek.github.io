@@ -11,7 +11,7 @@ import { initSocial, stopSocial, renderFriends, addFriend, openProfile, closePro
 import { createRecorder, openReplay, closeReplay, encode } from './replay.js';
 import { registerSW, pushState, enablePush, disablePush, isIOS } from './push.js';
 import { initRewards, renderRewardTiles, loadAchievements, openDaily, closeDaily, openAch, closeAch, BONUS_EVERY, achievements } from './rewards.js';
-import { initReactions, showReactBtn, EMOTES, emoteHTML } from './reactions.js';
+import { initReactions, showReactBtn, EMOTES, emoteHTML, padEmote } from './reactions.js';
 import { initShare, shareMatch, closeShare, showWatch, openQR, closeQR, installHTML, bindInstall } from './share.js';
 import { sb, SUPABASE_URL, SUPABASE_KEY, Room, newCode, cleanCode, quickMatch } from './net.js';
 
@@ -1012,9 +1012,15 @@ initPad({
   lob: () => { audio(); if (myBall()) { LI.l++; LI.aFlash = .15; buzz([10, 30, 18]); } else { LI.a++; LI.aFlash = .15; } },
   swap: () => { if (!myBall()) { LI.a++; LI.aFlash = .15; } },
   menu: () => openMenu(),
+  emote: () => padEmote(),
+  skill: (x, y) => {
+    if (SET.skills === false) { if (!LI.skTip) { LI.skTip = 1; toast('Dribbles désactivés : active « Dribbles et feintes » dans les Paramètres'); } return; }
+    if (!x && !y) { x = 1; y = 0; } // à l'arrêt : vers le but adverse (toujours à droite de l'écran)
+    LI.sk = (LI.sk || 0) + 1; LI.skx = x; LI.sky = y;
+  },
   back: () => { if (closeTop()) return; const h = document.querySelector('.screen:not([hidden]) [data-home]'); if (h) h.click(); },
   start: () => { if (!$('#menu').hidden) $('#menu').hidden = true; },
-  onJoin: p => { const L = padLabels(); toast(`🎮 Manette détectée · ${L.A} passe · ${L.X} en l'air · ${L.B} tir · ${L.LB} changer`); },
+  onJoin: p => { const L = padLabels(); toast(`🎮 Manette détectée · ${L.A} passe · ${L.X} en l'air · ${L.B} tir · ${L.LB} changer · stick droit dribble · ${L.SE} réactions`); },
   onLeave: () => toast('Manette déconnectée'),
 });
 /** Entrée locale en coordonnées terrain */
@@ -1194,7 +1200,7 @@ function frame(now) {
     const net = g.online && g.net ? { ok: g.net.ok, label: g.net.mode === 'p2p' ? `DIRECT ${g.net.rtt || ''}ms` : `RELAIS ${g.net.rtt || ''}ms` } : null;
     const rp = replayFrame(g, now);
     if (SET.saver && (g.fr = (g.fr || 0) + 1) % 2) { requestAnimationFrame(frame); return; } // économie : 30 images/s
-    R.draw(rp || g.V, g.M, { me: g.side, slot: g.slot, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, localCharge: g.localCharge, parts: g.parts, overlay, net });
+    R.draw(rp || g.V, g.M, { me: g.side, slot: g.slot, replay: !!rp, input: LI, pad: PAD.on ? padLabels() : null, skills: SET.skills !== false, localCharge: g.localCharge, parts: g.parts, overlay, net });
     placeReacts(g, rp ? null : g.V, now);
   }
   requestAnimationFrame(frame);

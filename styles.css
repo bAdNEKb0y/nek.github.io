@@ -989,3 +989,6 @@ body.ingame .toast.show{transform:translate(-50%,0)}
   .joinrow .btn.small{padding-left:10px;padding-right:10px}
   .tile{padding-left:12px;padding-right:12px}
 }
+
+/* Manette : réaction sélectionnée dans la rangée */
+.emo-it.padsel{transform:translate(var(--x),var(--y)) scale(1.18)!important;outline:3px solid var(--flood);outline-offset:3px;z-index:2}

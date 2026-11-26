@@ -366,7 +366,8 @@ export function createRenderer(canvas) {
 
   /** Mini-carte en bas au centre : tout le terrain d'un coup d'œil (utile avec la caméra proche) */
   function drawRadar(V, M) {
-    const w = Math.min(140, R.W * .17), h = w * FW / FL, x0 = (R.W - w) / 2, y0 = R.H - h - Math.max(8, R.H * .025);
+    const w = Math.min(140, R.W * .17), h = w * FW / FL, x0 = R.padOn ? 14 + (R.safeL || 0) : (R.W - w) / 2, // manette : pas de joystick à l'écran, la mini-carte va en bas à gauche
+      y0 = R.H - h - Math.max(8, R.H * .025);
     const mx = (x, y) => x0 + (R.me === 0 ? (FL - y) : y) / FL * w, my = (x, y) => y0 + (R.me === 0 ? x : FW - x) / FW * h;
     ctx.save(); ctx.globalAlpha = .82;
     ctx.fillStyle = 'rgba(8,20,14,.6)'; ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1;
@@ -466,7 +467,7 @@ export function createRenderer(canvas) {
     const gkHas = own >= 0 && M.players[own].gk && M.players[own].t === me;
     const held = I.aDown ? Math.min(1, (performance.now() - I.aT) / 320) : 0;
     const items = has || gkHas
-      ? [[L.A, held >= 1 ? 'EN L\'AIR' : 'PASSE', '#7fd99a', held], [L.X, 'EN L\'AIR', '#5ad1e6', 0], [L.B, 'TIR', '#f0776b', has ? ui.localCharge : 0]]
+      ? [...(has && ui.skills ? [[L.RS, 'DRIBBLE', '#c9a6ff', 0]] : []), [L.A, held >= 1 ? 'EN L\'AIR' : 'PASSE', '#7fd99a', held], [L.X, 'EN L\'AIR', '#5ad1e6', 0], [L.B, 'TIR', '#f0776b', has ? ui.localCharge : 0]]
       : [[L.A, 'CHANGER', '#7fd99a', 0], [L.B, 'VOLER', '#f0776b', 0], [L.LB, 'CHANGER', '#ffe08a', 0]];
     const fz = R.H < 420 ? 12 : 14, rad = fz * .95;
     ctx.font = `700 ${fz}px ${FD}`; ctx.textBaseline = 'middle';
@@ -572,6 +573,7 @@ export function createRenderer(canvas) {
   R.shk = 0; let shkT = 0;
   R.toScreen = (x, y) => [sx(x, y), sy(x, y)]; // pour poser des éléments HTML au-dessus d'un joueur
   R.draw = (V, M, ui) => {
+    R.padOn = !!ui?.pad; R.safeL = ui?.safeL || 0;
     R.me = ui.me; R.slot = ui.slot ?? ui.me; // R.me = mon équipe (sens du terrain), R.slot = l'humain que je suis
     const nowT = performance.now(), dtS = Math.min(.1, (nowT - (shkT || nowT)) / 1000); shkT = nowT;
     if (R.shk > 0) { R.shk = Math.max(0, R.shk - dtS); const a = R.shk * 14; canvas.style.transform = R.shk ? `translate(${(Math.random() * 2 - 1) * a}px,${(Math.random() * 2 - 1) * a}px)` : ''; }

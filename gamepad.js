@@ -1,10 +1,10 @@
 /* Manette (Xbox, PlayStation, Switch Pro, manettes Bluetooth/USB) via l'API Gamepad.
-   Détection automatique : dès qu'on appuie sur un bouton, la manette est reconnue.
-   En match : stick gauche / croix = déplacement, A = passe (appui long = en l'air), X = passe en l'air,
-   B = tir / tacle, LB/Y = changer de joueur, Start = menu.
-   Dans les menus : stick / croix pour se déplacer, A pour valider, B pour revenir. */
+   Détection automatique : dès qu'on appuie sur un bouton ou qu'on bouge un stick, la manette est reconnue.
+   En match : stick gauche / croix = déplacement, A = passe (appui long = en l'air), X / LT = passe en l'air,
+   B / RT = tir / tacle, LB / Y = changer de joueur, stick droit / RB = dribble, Select = réactions, Start = menu.
+   Dans les menus : stick / croix pour se déplacer, A pour valider, B pour revenir, stick droit pour faire défiler. */
 
-const DZ = .2;
+const DZ = .18, FULL = .9; // zone morte radiale ; vitesse max un peu avant le bout du stick
 const S = { idx: -1, prev: [], navT: 0, navDir: '', name: '', last: 0 };
 let H = null; // callbacks fournis par app.js
 
@@ -19,9 +19,9 @@ function kind(id) {
 }
 /** Libellés des boutons selon la marque de la manette */
 export function padLabels() {
-  return PAD.type === 'ps' ? { A: '✕', B: '○', X: '□', Y: '△', LB: 'L1', ST: 'OPTIONS' }
-    : PAD.type === 'nin' ? { A: 'B', B: 'A', X: 'Y', Y: 'X', LB: 'L', ST: '+' }
-      : { A: 'A', B: 'B', X: 'X', Y: 'Y', LB: 'LB', ST: 'START' };
+  return PAD.type === 'ps' ? { A: '✕', B: '○', X: '□', Y: '△', LB: 'L1', RB: 'R1', RS: 'R3', SE: 'SHARE', ST: 'OPTIONS' }
+    : PAD.type === 'nin' ? { A: 'B', B: 'A', X: 'Y', Y: 'X', LB: 'L', RB: 'R', RS: 'RS', SE: '−', ST: '+' }
+      : { A: 'A', B: 'B', X: 'X', Y: 'Y', LB: 'LB', RB: 'RB', RS: 'RS', SE: 'VIEW', ST: 'START' };
 }
 
 export function rumble(ms = 80, strong = .6, weak = .4) {
@@ -52,35 +52,66 @@ function pick(gp) {
 
 const pressed = (gp, i) => !!gp.buttons[i]?.pressed;
 
+/** Stick avec zone morte radiale et courbe douce (petits mouvements précis, vitesse max avant la butée) */
+function stick(ax, ay) {
+  let x = ax || 0, y = ay || 0;
+  const m = Math.hypot(x, y);
+  if (m < DZ) return [0, 0, 0];
+  let k = Math.min(1, (m - DZ) / (FULL - DZ)); k = k * (.55 + .45 * k); // courbe : précis au début, franc au bout
+  return [x / m * k, y / m * k, m];
+}
+/** Croix directionnelle : boutons 12-15 (mapping standard) ou « chapeau » sur un axe (certaines manettes Bluetooth) */
+function dpad(gp) {
+  let x = 0, y = 0;
+  if (pressed(gp, 14)) x = -1; if (pressed(gp, 15)) x = 1;
+  if (pressed(gp, 12)) y = -1; if (pressed(gp, 13)) y = 1;
+  if (!x && !y && gp.mapping !== 'standard') {
+    const h = gp.axes[9];
+    if (h !== undefined && h >= -1.05 && h <= 1.05 && Math.abs(h) > .05 && h < 1.01) { // chapeau 8 directions
+      const a = Math.round((h + 1) / (2 / 7)); // 0 = haut, puis sens horaire
+      const D = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]][a];
+      if (D) [x, y] = D;
+    } else if (gp.axes.length >= 8 && (Math.abs(gp.axes[6]) > .5 || Math.abs(gp.axes[7]) > .5)) {
+      x = Math.round(gp.axes[6]); y = Math.round(gp.axes[7]);
+    }
+  }
+  return [x, y];
+}
+const trig = (gp, i) => { const b = gp.buttons[i]; return !!b && (b.pressed || b.value > .45); };
+
 /** À appeler à chaque image */
 export function pollPad(now) {
   const list = navigator.getGamepads ? navigator.getGamepads() : [];
   let gp = S.idx >= 0 ? list[S.idx] : null;
-  if (!gp) { // première manette où un bouton est appuyé
-    for (const g of list) if (g && g.connected && g.buttons.some(b => b.pressed)) { pick(g); gp = g; break; }
+  if (!gp) { // première manette où un bouton est appuyé ou un stick bougé
+    for (const g of list) if (g && g.connected && (g.buttons.some(b => b.pressed) || g.axes.slice(0, 4).some(a => Math.abs(a) > .6))) { pick(g); gp = g; break; }
     if (!gp) return;
   }
   if (!gp.connected) return;
-  // Stick gauche avec zone morte radiale + croix directionnelle
-  let x = gp.axes[0] || 0, y = gp.axes[1] || 0;
-  const m = Math.hypot(x, y);
-  if (m < DZ) { x = 0; y = 0; } else { const k = Math.min(1, (m - DZ) / (1 - DZ)) / m; x *= k; y *= k; }
-  if (pressed(gp, 14)) x = -1; if (pressed(gp, 15)) x = 1;
-  if (pressed(gp, 12)) y = -1; if (pressed(gp, 13)) y = 1;
+  let [x, y] = stick(gp.axes[0], gp.axes[1]);
+  const [dx, dy] = dpad(gp); if (dx || dy) { x = dx; y = dy; }
   const mm = Math.hypot(x, y); if (mm > 1) { x /= mm; y /= mm; }
   PAD.x = x; PAD.y = y;
+  // Stick droit (axes 2-3 en standard)
+  const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0, rm = Math.hypot(rx, ry);
 
-  const cur = gp.buttons.map(b => b.pressed);
+  const cur = gp.buttons.map((b, i) => (i === 6 || i === 7) ? trig(gp, i) : b.pressed);
   const down = i => cur[i] && !S.prev[i], up = i => !cur[i] && S.prev[i];
   if (cur.some((c, i) => c !== S.prev[i])) S.last = now;
   const inGame = H?.inGame?.();
   if (inGame) {
     if (down(0)) H.aDown(); if (up(0)) H.aUp();
     if (down(1) || down(7)) H.bDown(); if ((up(1) && !cur[7]) || (up(7) && !cur[1])) H.bUp();
-    if (down(2)) H.lob();
+    if (down(2) || down(6)) H.lob();
     if (down(3) || down(4)) H.swap();
-    if (down(9) || down(8)) H.menu();
+    if (down(9)) H.menu();
+    if (down(8)) H.emote?.();
+    // Dribble : coup sec du stick droit (dans sa direction) ou RB / clic stick droit (vers où on court)
+    if (!S.rFlick && rm > .8) { S.rFlick = true; H.skill?.(rx / rm, ry / rm); }
+    else if (S.rFlick && rm < .35) S.rFlick = false;
+    if (down(5) || down(11)) { const m = Math.hypot(x, y); H.skill?.(m > .2 ? x / m : 0, m > .2 ? y / m : 0); }
   } else {
+    S.rFlick = rm > .8;
     // Navigation dans les menus
     const dir = Math.abs(x) > .5 || Math.abs(y) > .5 ? (Math.abs(x) > Math.abs(y) ? (x > 0 ? 'r' : 'l') : (y > 0 ? 'd' : 'u')) : '';
     if (dir && (dir !== S.navDir || now - S.navT > (S.navRep ? 140 : 380))) { S.navRep = dir === S.navDir; S.navDir = dir; S.navT = now; navigate(dir); }
@@ -88,8 +119,27 @@ export function pollPad(now) {
     if (down(0)) activate();
     if (down(1)) H?.back?.();
     if (down(9)) H?.start?.();
+    if (down(4) || down(5)) tab(down(5) ? 1 : -1); // LB / RB : onglet précédent / suivant
+    if (Math.abs(ry) > .25) scrollBy(ry); // stick droit : faire défiler
   }
   S.prev = cur;
+}
+/** Fait défiler le calque ou l'écran visible */
+function scrollBy(v) {
+  const sc = scope();
+  let el = sc;
+  const can = e => e && e.scrollHeight > e.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(e).overflowY);
+  if (!can(el)) el = [...sc.querySelectorAll('*')].find(can) || document.scrollingElement;
+  el.scrollTop += Math.sign(v) * (Math.abs(v) - .25) * 26;
+}
+/** LB / RB : passe à l'onglet voisin quand l'écran a des onglets */
+function tab(d) {
+  const tabs = [...scope().querySelectorAll('[role="tab"],.tabs button,[data-tab]')].filter(visible);
+  if (tabs.length < 2) return;
+  let i = tabs.findIndex(t => t.getAttribute('aria-selected') === 'true' || t.classList.contains('on'));
+  if (i < 0) i = 0;
+  const n = tabs[(i + d + tabs.length) % tabs.length];
+  n.click(); focus(n);
 }
 
 /* ---------- Navigation au focus dans les écrans HTML ---------- */
